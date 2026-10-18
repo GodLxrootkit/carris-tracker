@@ -1,0 +1,172 @@
+name: Weekly release
+
+# Ships the refreshed CARRIS data to phones, which the in-app updater can then deliver.
+#
+# The data asset is already regenerated and committed daily by refresh-carris-asset.yml. This job
+# is the other half of that loop: without it the refreshed asset sits on main and no installed copy
+# of the app ever gets it, because the bundled data is baked into the APK.
+on:
+  schedule:
+    # Sunday 12:00 UTC. Off the hour is deliberate for the same reason the daily refresh is at
+    # 05:23 - GitHub's scheduler is heavily oversubscribed on the hour. In Lisbon this is 12:00
+    # in winter and 11:00 in summer.
+    - cron: '0 12 * * 0'
+  # Also runnable by hand, which is how this was tested.
+  workflow_dispatch:
+
+# Only enough to push a commit, a tag and a release. The repository default is read-only, so this
+# is an explicit, narrow opt-in rather than an inherited permission.
+permissions:
+  contents: write
+
+# Never two releases at once, and never cancel one mid-flight: a cancelled job can leave a tag
+# pushed without its release.
+concurrency:
+  group: weekly-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    # The guard that keeps the signing secrets out of reach of anyone who can only open a pull
+    # request. Secrets are not passed to fork PRs, and this job is not even offered to them.
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*') }}
+
+      # Fail loudly rather than quietly producing an unsigned APK. Without a key the build still
+      # succeeds - deliberately, so a plain checkout can be built - and publishing that would give
+      # every user an update their devices refuse to install.
+      - name: Check the signing secrets are present
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          missing=()
+          [ -n "$KEYSTORE_B64" ]    || missing+=("KEYSTORE_B64")
+          [ -n "$STORE_PASSWORD" ]  || missing+=("STORE_PASSWORD")
+          [ -n "$KEY_ALIAS" ]       || missing+=("KEY_ALIAS")
+          [ -n "$KEY_PASSWORD" ]    || missing+=("KEY_PASSWORD")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::missing secrets: ${missing[*]}. Refusing to publish an unsigned APK."
+            exit 1
+          fi
+
+      # Minimum increment: 2.5.0 -> 2.5.1 -> 2.5.2. versionCode moves with it, because Android
+      # refuses an install whose code is not greater than the one already on the device.
+      - name: Bump the version
+        id: bump
+        run: python3 tools/bump_version.py --apply --github-output "$GITHUB_OUTPUT"
+
+      # Stated in the release notes, so a user can tell a data build from a code change.
+      - name: Read the CARRIS feed version in the asset
+        id: feed
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, pathlib
+          v = json.loads(pathlib.Path("app/src/main/res/raw/carris_lines.json").read_text())["feedVersion"]
+          print(f"feed={v}")
+          PY
+
+      - name: Unit and layout tests
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      - name: Build the signed release APK
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --console=plain
+
+      # The one step that makes this trustworthy. The in-app updater compares the downloaded APK's
+      # signing certificate against a fingerprint compiled into the app and deletes the file if it
+      # does not match, so an APK signed with anything else would be rejected by every user. Catch
+      # that here instead of shipping it.
+      - name: Verify the APK carries the expected certificate
+        run: |
+          # Discovered rather than pinned: the runner's build-tools version changes, and a hardcoded
+          # path is a release that silently stops working.
+          BUILD_TOOLS=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          echo "using $BUILD_TOOLS"
+          # Into RUNNER_TEMP, not the working tree: an untracked file left in the checkout makes
+          # the `git pull --rebase` below refuse to run.
+          "$BUILD_TOOLS/apksigner" verify --print-certs \
+            app/build/outputs/apk/release/app-release.apk \
+            | tee "$RUNNER_TEMP/fingerprint.txt"
+          EXPECTED="4ddcf76febbdec158dc10a7e2c7c2b6d1286938a212db68d51f4abef5074687f"
+          if ! grep -qi "$EXPECTED" "$RUNNER_TEMP/fingerprint.txt"; then
+            echo "::error::APK is not signed with the expected certificate. Refusing to publish."
+            exit 1
+          fi
+
+      - name: Remove the key material from the workspace
+        if: always()
+        run: rm -f build/ci-release.jks app/build/outputs/apk/release/*.idsig
+
+      - name: Commit the version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          git commit -m "release: v${{ steps.bump.outputs.version }}"
+
+          # --autostash, because the build leaves files behind that git still considers changes and
+          # a plain --rebase refuses to run on a dirty tree. The daily data refresh may also have
+          # pushed since this checkout, so the bump has to land on top of that rather than be
+          # rejected.
+          echo "--- working tree state ---"
+          git status --porcelain | head -20
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
+
+      - name: Tag
+        run: git tag -a "v${{ steps.bump.outputs.version }}" -m "v${{ steps.bump.outputs.version }}"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.bump.outputs.version }}
+          CODE: ${{ steps.bump.outputs.code }}
+          FEED: ${{ steps.feed.outputs.feed }}
+        run: |
+          # Written to RUNNER_TEMP rather than a heredoc inside a quoted substitution: an indented
+          # closing delimiter silently truncates the notes, which is a miserable thing to debug.
+          cat > "$RUNNER_TEMP/notes.md" <<EOF
+          ## Actualização semanal
+
+          Build automática, sem alterações ao código: serve apenas para entregar ao telemóvel os
+          dados da CARRIS que foram regenerados durante a semana.
+
+          - **Dados da CARRIS**: feed \`$FEED\`
+          - **Versão**: \`$VERSION\` (código \`$CODE\`)
+          - Assinado com a mesma chave das versões anteriores, por isso instala por cima sem
+            desinstalar.
+
+          Para instalar: Definições → Procurar agora.
+          EOF
+          git push origin "v$VERSION"
+          gh release create "v$VERSION" \
+            app/build/outputs/apk/release/app-release.apk \
+            --title "v$VERSION" \
+            --latest \
+            --notes-file "$RUNNER_TEMP/notes.md"
