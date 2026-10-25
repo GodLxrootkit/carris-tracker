@@ -281,13 +281,13 @@ private fun UpdateCard(state: AppState) {
                 StatusLine("Transferido e verificado")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = {
-                        // Clearing first means a failure here cannot leave a stale file behind
-                        // that a later attempt would happily reuse.
-                        Update.discard(context)
-                        state.resetUpdate()
+                        // Keep the file: the installer reads it through the URI after startActivity
+                        // returns, so deleting it here surfaces as "problem parsing the package".
+                        // The next download clears any leftover.
                         runCatching {
                             context.startActivity(Update.installIntent(context, u.file))
                         }
+                        state.resetUpdate()
                     }) { Text("Instalar") }
                     TextButton(onClick = {
                         Update.discard(context)
