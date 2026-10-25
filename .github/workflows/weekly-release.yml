@@ -168,9 +168,12 @@ jobs:
 
           Para instalar: Definições → Procurar agora.
           EOF
+          # Upload under the name Update.ASSET_NAME looks for. Gradle's app-release.apk would
+          # otherwise reach users as "a release não tem o APK".
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/carris-tracker-release.apk"
           git push origin "v$VERSION"
           gh release create "v$VERSION" \
-            app/build/outputs/apk/release/app-release.apk \
+            "$RUNNER_TEMP/carris-tracker-release.apk" \
             --title "v$VERSION" \
             --latest \
             --notes-file "$RUNNER_TEMP/notes.md"
