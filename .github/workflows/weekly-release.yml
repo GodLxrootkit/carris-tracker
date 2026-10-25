@@ -73,9 +73,13 @@ jobs:
 
       # Minimum increment: 2.5.0 -> 2.5.1 -> 2.5.2. versionCode moves with it, because Android
       # refuses an install whose code is not greater than the one already on the device.
+      # The highest existing tag is a floor: a rewritten main can carry an older version file
+      # than the last release, and only the tag tells us which versions are already taken.
       - name: Bump the version
         id: bump
-        run: python3 tools/bump_version.py --apply --github-output "$GITHUB_OUTPUT"
+        run: |
+          latest=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          python3 tools/bump_version.py --apply --github-output "$GITHUB_OUTPUT" --floor "$latest"
 
       # Stated in the release notes, so a user can tell a data build from a code change.
       - name: Read the CARRIS feed version in the asset

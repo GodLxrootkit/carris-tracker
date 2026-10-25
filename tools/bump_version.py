@@ -27,13 +27,28 @@ def parse(text):
     return name, code
 
 
-def next_patch(version_name):
-    """2.5.0 -> 2.5.1. Preserves a pre-release suffix rather than dropping it silently."""
-    core, _, suffix = version_name.partition("-")
-    parts = core.split(".")
+def version_core(version_name):
+    """2.5.1-rc1 -> (2, 5, 1), refusing anything that is not MAJOR.MINOR.PATCH."""
+    parts = version_name.partition("-")[0].split(".")
     if len(parts) != 3 or not all(p.isdigit() for p in parts):
         sys.exit(f"versionName {version_name!r} is not MAJOR.MINOR.PATCH")
-    major, minor, patch = (int(p) for p in parts)
+    return tuple(int(p) for p in parts)
+
+
+def next_patch(version_name, floor=None):
+    """2.5.0 -> 2.5.1, but never at or below [floor] (the highest published tag).
+
+    The version file can fall behind the tags after a history rewrite, and reusing a tag then
+    fails only once the bump has already been pushed.
+    """
+    major, minor, patch = version_core(version_name)
+    if floor:
+        floor_major, floor_minor, floor_patch = version_core(floor)
+        if (floor_major, floor_minor) > (major, minor):
+            sys.exit(f"cannot bump {version_name!r} past {floor!r}: raise the minor version by hand")
+        if (floor_major, floor_minor) == (major, minor):
+            patch = max(patch, floor_patch)
+    _, _, suffix = version_name.partition("-")
     bumped = f"{major}.{minor}.{patch + 1}"
     return f"{bumped}-{suffix}" if suffix else bumped
 
@@ -45,6 +60,8 @@ def main():
                         help="rewrite the file; without it, just print the next version")
     parser.add_argument("--github-output", metavar="FILE",
                         help="append version= and code= to a GITHUB_OUTPUT file")
+    parser.add_argument("--floor", metavar="VERSION",
+                        help="highest version already published (a release tag); never reuse it")
     args = parser.parse_args()
 
     path = pathlib.Path(args.file)
@@ -53,8 +70,11 @@ def main():
 
     current_name = name_m.group(2)
     current_code = int(code_m.group(2))
-    new_name = next_patch(current_name)
-    new_code = current_code + 1
+    floor = args.floor.removeprefix("v").removeprefix("V") if args.floor else None
+    new_name = next_patch(current_name, floor)
+    # Advance versionCode by the number of releases the name moved past the file's version.
+    # Normally that is 1; after a stale file it also covers the skipped patch versions.
+    new_code = current_code + version_core(new_name)[2] - version_core(current_name)[2]
 
     # Guard against the two drifting apart: a release whose code is not ahead of the published
     # one installs as a downgrade, which Android refuses.
