@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -74,6 +76,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -130,6 +133,7 @@ fun App(state: AppState = viewModel()) {
     var tab by remember { mutableIntStateOf(0) }
     var network by remember { mutableStateOf("carris") }
     var showPicker by remember { mutableStateOf(false) }
+    val update by state.update.collectAsState()
 
     // The network polls stop when the app leaves the screen and resume when it comes back. Without
     // this they ran for the life of the process, spending ~44 MB/hour on a map nobody was looking
@@ -153,25 +157,35 @@ fun App(state: AppState = viewModel()) {
     } else {
         Scaffold(
             bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                    NavigationBarItem(
-                        selected = tab == 0,
-                        onClick = { tab = 0 },
-                        icon = { Icon(Icons.Default.Place, contentDescription = "Paragens") },
-                        label = { Text("Paragens") }
-                    )
-                    NavigationBarItem(
-                        selected = tab == 1,
-                        onClick = { tab = 1 },
-                        icon = { Icon(Icons.Default.Map, contentDescription = "Mapa") },
-                        label = { Text("Mapa") }
-                    )
-                    NavigationBarItem(
-                        selected = tab == 2,
-                        onClick = { tab = 2 },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = "Definições") },
-                        label = { Text("Definições") }
-                    )
+                Column {
+                    val offered = (update as? UpdateStatus.Available)?.update
+                    if (tab != 2 && offered != null) {
+                        UpdateBanner(
+                            version = offered.version,
+                            onOpen = { tab = 2 },
+                            onDismiss = { state.declineUpdate() }
+                        )
+                    }
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                        NavigationBarItem(
+                            selected = tab == 0,
+                            onClick = { tab = 0 },
+                            icon = { Icon(Icons.Default.Place, contentDescription = "Paragens") },
+                            label = { Text("Paragens") }
+                        )
+                        NavigationBarItem(
+                            selected = tab == 1,
+                            onClick = { tab = 1 },
+                            icon = { Icon(Icons.Default.Map, contentDescription = "Mapa") },
+                            label = { Text("Mapa") }
+                        )
+                        NavigationBarItem(
+                            selected = tab == 2,
+                            onClick = { tab = 2 },
+                            icon = { Icon(Icons.Default.Settings, contentDescription = "Definições") },
+                            label = { Text("Definições") }
+                        )
+                    }
                 }
             },
             containerColor = MaterialTheme.colorScheme.background
@@ -181,6 +195,41 @@ fun App(state: AppState = viewModel()) {
                 1 -> MapScreen(state, padding, network)
                 else -> SettingsScreen(state, padding, network)
             }
+        }
+    }
+}
+
+/** One-line notice above the tabs, so an update found at launch is not hidden in Settings. */
+@Composable
+private fun UpdateBanner(version: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth()
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(start = 16.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Default.SystemUpdate,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(
+            "Versão $version disponível",
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSecondaryContainer
+        )
+        TextButton(onClick = onOpen) { Text("Ver") }
+        IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Ignorar actualização",
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -323,7 +372,7 @@ fun StopsScreen(state: AppState, padding: PaddingValues, network: String = "carr
                     )
                     Text("Sem paragens ainda", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Adicione 2–3 paragens para ver quanto falta para o próximo autocarro das linhas ${lines.map { it.shortName }.distinct().joinToString(", ")}.",
+                        "Adicione 2–3 paragens para ver quanto falta para o próximo autocarro das linhas ${lines.map { displayLineName(it) }.distinct().joinToString(", ")}.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
@@ -382,7 +431,7 @@ private fun NetworkTabs(network: String, onNetworkChange: (String) -> Unit) {
 private fun arrivalsSummary(arrivals: List<Arrival>, lines: List<LineInfo>, now: Long): String {
     if (arrivals.isEmpty()) return "Sem passagens previstas"
     return arrivals.take(2).joinToString("  ·  ") { a ->
-        val name = lines.find { it.id == a.lineId }?.shortName ?: a.lineId
+        val name = lines.find { it.id == a.lineId }?.let { displayLineName(it) } ?: a.lineId
         val eta = if (a.realtime) Schedule.countdown(a.effectiveUnix, now) else Schedule.hhMm(a.effectiveUnix)
         "$name $eta"
     }
@@ -425,6 +474,35 @@ private fun ReorderButtons(
                 modifier = Modifier.size(20.dp)
             )
         }
+    }
+}
+
+/**
+ * Line name on a coloured pill.
+ *
+ * Widens for long names and ellipsizes only if still too long, so every line stays readable at
+ * a glance.
+ */
+@Composable
+internal fun LineBadge(label: String, color: String, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier
+            .height(26.dp)
+            .widthIn(min = 46.dp, max = 112.dp)
+            .clip(shape)
+            .background(Color(android.graphics.Color.parseColor(color)), shape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            label,
+            color = Color.White,
+            fontWeight = FontWeight.Black,
+            fontSize = 12.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
     }
 }
 
@@ -496,21 +574,10 @@ internal fun StopCard(
                 val line = lines.find { it.id == arrival.lineId }
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        Modifier.size(width = 46.dp, height = 26.dp)
-                            .background(
-                                Color(android.graphics.Color.parseColor(line?.color ?: "#888888")),
-                                RoundedCornerShape(8.dp)
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            line?.shortName ?: arrival.lineId,
-                            color = Color.White,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 12.sp
-                        )
-                    }
+                    LineBadge(
+                        label = line?.let { displayLineName(it) } ?: arrival.lineId,
+                        color = line?.color ?: "#888888"
+                    )
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text(arrival.headsign, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
@@ -659,7 +726,7 @@ fun StopPickerScreen(state: AppState, onBack: () -> Unit) {
                         name = stop.name,
                         detail = providerLabel(stop) + " - " + stop.lineIds
                             .filter { it in TRACKED_LINE_IDS }
-                            .map { lines.shortNameOf(it) }
+                            .map { lines.displayNameOf(it) }
                             .sorted()
                             .joinToString(" · ")
                     ) {

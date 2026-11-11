@@ -349,7 +349,7 @@ val busCount = remember(vehicles, lines) {
                     // Added last so buses always sit on top of the route lines.
                     busOverlay.vehicles = visibleVehicles()
                     busOverlay.lineColor = { id -> busColor[id] ?: "#888888" }
-                    busOverlay.lineLabel = { id -> lines.shortNameOf(id) }
+                    busOverlay.lineLabel = { id -> lines.displayNameOf(id) }
                     // With a filter on, or a bus selected, the dots are few enough to label even
                     // when zoomed out — that is the case where the number actually matters.
                     busOverlay.forceLabels = filter != null || selected != null
@@ -429,7 +429,7 @@ val busCount = remember(vehicles, lines) {
                     VehicleCard(
                         vehicle = bus,
                         lineColor = lines.find { it.id == bus.lineId }?.color ?: "#888888",
-                        lineLabel = lines.shortNameOf(bus.lineId),
+                        lineLabel = lines.displayNameOf(bus.lineId),
                         headsign = state.headsignOf(bus),
                         hint = state.hintFor(bus),
                         now = now,
@@ -511,11 +511,12 @@ internal fun LineFilterRow(
             lastProvider = provider
 
             val count = busCount[line.shortName] ?: 0
+            val label = displayLineName(line)
             Box(Modifier.alpha(if (count == 0) 0.45f else 1f)) {
                 FilterChip(
                     selected = filter == line.shortName,
                     onClick = { onFilter(if (filter == line.shortName) null else line.shortName) },
-                    label = { Text(if (count == 0) line.shortName else "${line.shortName} · $count") },
+                    label = { Text(if (count == 0) label else "$label · $count") },
                     leadingIcon = {
                         Box(
                             Modifier.size(12.dp).background(
@@ -624,13 +625,7 @@ private fun VehicleCard(
             Modifier.fillMaxWidth().padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                Modifier.size(width = 46.dp, height = 26.dp)
-                    .background(Color(AndroidColor.parseColor(lineColor)), RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(lineLabel, color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
+            LineBadge(label = lineLabel, color = lineColor)
             Column(Modifier.weight(1f).padding(start = 10.dp)) {
                 // The destination is the header, always: it is what identifies the bus, and it
                 // is the one thing that differs between two buses of the same line. Anything

@@ -186,15 +186,21 @@ fun SettingsScreen(state: AppState, padding: PaddingValues, network: String = "c
                     enabled = !broken
                 )
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
+                    val label = displayLineName(line)
                     Text(
-                        line.shortName,
+                        label,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = dim)
                     )
                     Text(
                         // Saying why a line cannot be picked beats a greyed-out row with no
-                        // explanation.
-                        if (broken) "Dados incorretos na fonte" else line.longName,
+                        // explanation. The short code is the useful second line for Metro,
+                        // whose display name is already the colour.
+                        when {
+                            broken -> "Dados incorretos na fonte"
+                            label == line.longName -> line.shortName
+                            else -> line.longName
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = dim * 0.65f),
                         maxLines = 2,

@@ -228,9 +228,9 @@ val vehicles: StateFlow<List<Vehicle>> =
     private val _update = MutableStateFlow<UpdateStatus>(UpdateStatus.Idle)
     val update: StateFlow<UpdateStatus> = _update.asStateFlow()
 
-    /** Whether to look for a new build when the app opens. Off by default until asked for. */
+    /** Whether to look for a new build when the app opens. On by default, with a switch to opt out. */
     var autoUpdate: Boolean
-        get() = prefs.getBoolean("autoUpdate", false)
+        get() = prefs.getBoolean("autoUpdate", true)
         set(v) = prefs.edit().putBoolean("autoUpdate", v).apply()
 
     private val _foreground = MutableStateFlow(true)

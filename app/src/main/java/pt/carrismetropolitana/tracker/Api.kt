@@ -48,6 +48,27 @@ val TRACKED_LINE_IDS = CM_TRACKED_LINE_IDS + CARRIS_TRACKED_LINE_IDS
 fun List<LineInfo>.shortNameOf(id: String): String =
     firstOrNull { it.id == id }?.shortName ?: bareOf(id)
 
+/**
+ * What the UI shows for a line: CP `Linha de Sintra` -> `Sintra`, Metro `Az` -> `Azul`.
+ *
+ * CP's "Linha de ..." prefix carries no information once the network is already selected, and
+ * Metro's two-letter codes are too cryptic to read at a glance.
+ */
+fun displayLineName(line: LineInfo): String = when (line.id.substringBefore(':')) {
+    PROVIDER_METRO -> line.longName.ifBlank { line.shortName }
+    else -> line.shortName.removeLinePrefix()
+}
+
+fun List<LineInfo>.displayNameOf(id: String): String =
+    firstOrNull { it.id == id }?.let(::displayLineName) ?: bareOf(id)
+
+private fun String.removeLinePrefix(): String {
+    for (prefix in listOf("Linha das ", "Linha dos ", "Linha de ", "Linha da ", "Linha do ", "Linha ")) {
+        if (startsWith(prefix, ignoreCase = true)) return substring(prefix.length)
+    }
+    return this
+}
+
 data class LineInfo(
     val id: String,
     val shortName: String,

@@ -96,6 +96,31 @@ class LineIdentityTest {
         assertEquals("9999", lines.shortNameOf("cm:9999"))
     }
 
+    @Test
+    fun displayNamesDropRedundantPrefixesAndUseMetroColours() {
+        assertEquals(
+            "Sintra",
+            displayLineName(LineInfo("cp:1", "Linha de Sintra", "Lisboa Rossio - Sintra", "#fff", emptyList()))
+        )
+        assertEquals(
+            "Azambuja",
+            displayLineName(LineInfo("cp:2", "Linha da Azambuja", "Lisboa - Azambuja", "#fff", emptyList()))
+        )
+        assertEquals(
+            "Azul",
+            displayLineName(LineInfo("metro:A", "Az", "Azul", "#1F5FA9", emptyList()))
+        )
+        assertEquals(
+            "716",
+            displayLineName(LineInfo("carris:164_0", "716", "Alameda - Benfica", "#C61D23", emptyList()))
+        )
+    }
+
+    @Test
+    fun unknownDisplayNamesFallBackToTheBareId() {
+        assertEquals("9999", emptyList<LineInfo>().displayNameOf("cm:9999"))
+    }
+
     /** gtfs version prefixes like "[VNWG3][LA77N]1707_0_1" must survive namespacing intact. */
     @Test
     fun cmVersionPrefixedIdsStillStrip() {
