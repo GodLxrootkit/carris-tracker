@@ -36,6 +36,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-    </application>
 
+        <!-- Robolectric Compose tests launch this activity; declaring it makes createComposeRule work. -->
+        <activity android:name="androidx.activity.ComponentActivity" />
+    </application>
 </manifest>
+
