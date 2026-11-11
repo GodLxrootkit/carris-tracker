@@ -6,11 +6,11 @@
 - [x] Fix Robolectric activity resolution for Compose tests
 
 ## Near-term code fixes
-- [ ] Read persisted lat/lon in AppState.loadStops()
-- [ ] Fall back to poll time when CARRIS RT timestamp is 0
-- [ ] Log HTTP error body in Api.get()
-- [ ] distinctBy stop id in nearestStops()
-- [ ] Validate downloaded APK size before signer check
+- [x] Read persisted lat/lon in AppState.loadStops()
+- [x] Fall back to poll time when CARRIS RT timestamp is 0
+- [x] Log HTTP error body in Api.get()
+- [x] distinctBy stop id in nearestStops()
+- [x] Validate downloaded APK size before signer check
 - [ ] Adaptive polling when screen off / low battery
 
 ## Product improvements
