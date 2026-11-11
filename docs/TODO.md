@@ -11,7 +11,7 @@
 - [x] Log HTTP error body in Api.get()
 - [x] distinctBy stop id in nearestStops()
 - [x] Validate downloaded APK size before signer check
-- [ ] Adaptive polling when screen off / low battery
+- [x] Adaptive polling when screen off / low battery
 
 ## Product improvements
 - [ ] Direction-aware arrival filtering
