@@ -3,6 +3,7 @@ package pt.carrismetropolitana.tracker
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,6 +77,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -134,6 +136,8 @@ fun App(state: AppState = viewModel()) {
     var network by remember { mutableStateOf("carris") }
     var showPicker by remember { mutableStateOf(false) }
     val update by state.update.collectAsState()
+    val context = LocalContext.current
+    val mapEnabled = network == "carris"
 
     // The network polls stop when the app leaves the screen and resume when it comes back. Without
     // this they ran for the life of the process, spending ~44 MB/hour on a map nobody was looking
@@ -175,7 +179,14 @@ fun App(state: AppState = viewModel()) {
                         )
                         NavigationBarItem(
                             selected = tab == 1,
-                            onClick = { tab = 1 },
+                            onClick = {
+                                if (mapEnabled) {
+                                    tab = 1
+                                } else {
+                                    Toast.makeText(context, "O mapa só está disponível na rede Carris.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.alpha(if (mapEnabled) 1f else 0.38f),
                             icon = { Icon(Icons.Default.Map, contentDescription = "Mapa") },
                             label = { Text("Mapa") }
                         )
@@ -486,17 +497,19 @@ private fun ReorderButtons(
 @Composable
 internal fun LineBadge(label: String, color: String, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(8.dp)
+    val bg = runCatching { Color(android.graphics.Color.parseColor(color)) }.getOrDefault(Color(0xFF888888))
     Box(
         modifier
             .height(26.dp)
             .widthIn(min = 46.dp, max = 112.dp)
             .clip(shape)
-            .background(Color(android.graphics.Color.parseColor(color)), shape),
+            .background(bg, shape),
         contentAlignment = Alignment.Center
     ) {
         Text(
             label,
-            color = Color.White,
+            // Yellow and other pale line colours need dark text to stay readable.
+            color = if (0.299f * bg.red + 0.587f * bg.green + 0.114f * bg.blue > 0.6f) Color(0xFF111111) else Color.White,
             fontWeight = FontWeight.Black,
             fontSize = 12.sp,
             maxLines = 1,

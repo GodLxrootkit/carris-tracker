@@ -3,6 +3,9 @@ import argparse, csv, io, json, os, zipfile, math
 HERE=os.path.dirname(os.path.abspath(__file__))
 RAW_DIR=os.path.join(os.path.dirname(HERE),'app','src','main','res','raw')
 
+# Official Metro de Lisboa line colours; the GTFS routes.txt has no usable route_color.
+LINE_COLORS={'A':'#1F5FA9','B':'#FFD100','C':'#00A651','D':'#E4002B'}
+
 def read(zf,name):
     with zf.open(name) as raw:
         text=io.TextIOWrapper(raw,encoding='utf-8-sig',newline='').read()
@@ -80,7 +83,7 @@ def main():
             'id':rid,
             'shortName':r['route_short_name'] or rid,
             'longName':r['route_long_name'] or r['route_desc'] or '',
-            'color':'#1F5FA9',
+            'color':LINE_COLORS.get(rid,'#1F5FA9'),
             'patternIds':[p['id'] for p in pat_list if p['lineId']==rid]
         })
 
