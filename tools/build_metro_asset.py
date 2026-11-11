@@ -37,24 +37,35 @@ def main():
     for t in by_trip.values():
         t.sort(key=lambda r:int(r['stop_sequence']))
 
-    # group trips by route+headsign, then by their exact stop sequence. One headsign can have
-    # short turns or a variant that skips a station (the Azul line's Praça de Espanha), so a
-    # single representative trip per headsign silently dropped stops and all their departures.
+    # weekday/weekend timetable per service_id. Day names rather than exact dates: the asset is
+    # bundled in the APK and only refreshed at release time, so date ranges would expire and
+    # silently leave the Metro with no departures.
+    day_flags=['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
+    service_days={}
+    for c in read(z,'calendar.txt'):
+        days=tuple(d for d in day_flags if c[d]=='1')
+        service_days[c['service_id']]=() if len(days)==7 else days
+
+    # group trips by route+headsign+weekdays, then by their exact stop sequence. One headsign
+    # can have short turns or a variant that skips a station (the Azul line's Praça de Espanha),
+    # so a single representative trip per headsign silently dropped stops and all departures.
     patterns={}
     for tr in trips:
         seq=tuple(s['stop_id'] for s in by_trip.get(tr['trip_id'],[]))
         if not seq: continue
-        patterns.setdefault((tr['route_id'],tr['trip_headsign'],seq),[]).append(tr)
+        days=service_days.get(tr['service_id'],())
+        patterns.setdefault((tr['route_id'],tr['trip_headsign'],days,seq),[]).append(tr)
 
     variants={}
-    for (route_id,headsign,seq),trs in patterns.items():
-        variants.setdefault((route_id,headsign),[]).append((seq,trs))
+    for (route_id,headsign,days,seq),trs in patterns.items():
+        variants.setdefault((route_id,headsign),[]).append((days,seq,trs))
 
     # build pattern list, most-used variant first so the primary pattern id stays stable
     pat_list=[]
     for (route_id,headsign),seqs in variants.items():
-        seqs.sort(key=lambda v:(-len(v[1]),v[0]))
-        for index,(seq,trs) in enumerate(seqs):
+        seqs.sort(key=lambda v:(-len(v[2]),v[0],v[1]))
+        base=f"{route_id}_{headsign}".replace(' ','_')
+        for index,(days,seq,trs) in enumerate(seqs):
             rep=trs[0]
             sts=by_trip.get(rep['trip_id'],[])
             if not sts: continue
@@ -75,14 +86,13 @@ def main():
                     times_by_stop.setdefault(s['stop_id'],set()).add(minutes(s['arrival_time']))
             for ps in p_stops:
                 ps['times']=sorted(times_by_stop.get(ps['stopId'],[]))
-            base=f"{route_id}_{headsign}".replace(' ','_')
             pat_id=base if index==0 else f"{base}_{index+1}"
             pat_list.append({
                 'id':pat_id,
                 'lineId':route_id,
                 'headsign':headsign,
                 'shapeId':None,
-                'validOn':[],
+                'validOn':list(days),
                 'stops':p_stops
             })
 

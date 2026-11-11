@@ -29,6 +29,7 @@ class MetroStationAssetTest {
         }.timeInMillis / 1000
         val arrivals = MetroGtfs.scheduledArrivals(context, alameda.id, eightAm, 10)
         assertEquals(setOf("metro:C", "metro:D"), arrivals.map { it.lineId }.toSet())
+        assertEquals(arrivals.size, arrivals.distinctBy { Triple(it.lineId, it.headsign, it.scheduledUnix) }.size)
     }
 
     @Test
@@ -45,5 +46,6 @@ class MetroStationAssetTest {
         }.timeInMillis / 1000
         val arrivals = MetroGtfs.scheduledArrivals(context, praca.id, eightAm, 10)
         assertTrue(arrivals.any { it.lineId == "metro:A" })
+        assertEquals(arrivals.size, arrivals.distinctBy { Triple(it.lineId, it.headsign, it.scheduledUnix) }.size)
     }
 }

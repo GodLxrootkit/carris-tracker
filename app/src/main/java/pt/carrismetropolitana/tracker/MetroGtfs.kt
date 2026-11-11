@@ -61,7 +61,9 @@ object MetroGtfs {
                 lineId = nsId(PROVIDER_METRO, o.getString("lineId")),
                 headsign = o.optString("headsign"),
                 shapeId = null,
-                validOn = emptySet(),
+                validOn = o.optJSONArray("validOn")?.let { a ->
+                    (0 until a.length()).map { a.getString(it) }.toSet()
+                }.orEmpty(),
                 stops = stops
             )
         }
@@ -84,6 +86,8 @@ object MetroGtfs {
         }.timeInMillis / 1000
 
         val out = ArrayList<Arrival>()
+        val today = Timetable.today(nowUnix)
+        val day = Timetable.dayName(nowUnix)
         for (platform in platforms) {
             if (!timesRoot.has(platform)) continue
             val perPattern = timesRoot.getJSONObject(platform)
@@ -91,6 +95,15 @@ object MetroGtfs {
                 val o = patternsArr.getJSONObject(i)
                 val pid = o.getString("id")
                 if (!perPattern.has(pid)) continue
+                val valid = o.optJSONArray("validOn")
+                if (valid != null && valid.length() > 0) {
+                    var runsToday = false
+                    for (k in 0 until valid.length()) {
+                        val v = valid.getString(k)
+                        if (v == today || v == day) { runsToday = true; break }
+                    }
+                    if (!runsToday) continue
+                }
                 val minutes = perPattern.getJSONArray(pid)
                 val stopsArr = o.getJSONArray("stops")
                 var hasStop = false
@@ -113,8 +126,9 @@ object MetroGtfs {
             }
         }
         // Limit per line, not overall: a busy line at an interchange must not crowd the other
-        // line out of the card before `Timetable.select` gets to group them.
-        out.distinctBy { it.patternId to it.scheduledUnix }
+        // line out of the card before `Timetable.select` gets to group them. Drop rows the user
+        // cannot tell apart: same line, direction and minute from two service variants.
+        out.distinctBy { Triple(it.lineId, it.headsign, it.scheduledUnix) }
             .groupBy { it.lineId }
             .values
             .flatMap { line -> line.sortedBy { it.scheduledUnix }.take(limit) }

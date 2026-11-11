@@ -58,8 +58,8 @@ android {
         applicationId = "pt.carrismetropolitana.tracker"
         minSdk = 24
         targetSdk = 35
-        versionCode = 298
-        versionName = "2.9.14"
+        versionCode = 299
+        versionName = "2.9.15"
     }
 
     signingConfigs {

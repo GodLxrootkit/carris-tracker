@@ -89,6 +89,22 @@ class TimetableTest {
         assertTrue(Timetable.arrivalsFromPatterns(listOf(pattern), "030605", overnight, "20261013", zone = zone).isNotEmpty())
     }
 
+    /** Metro's asset stores weekdays, not dates, so it does not expire between app releases. */
+    @Test
+    fun weekdayNameRunsOnlyOnThatWeekday() {
+        val mondayOnly = pattern.copy(validOn = setOf("monday"))
+        assertTrue(
+            Timetable.arrivalsFromPatterns(
+                listOf(mondayOnly), "030605", at(5, 0, 12), "20261012", zone = zone
+            ).isNotEmpty()
+        )
+        assertTrue(
+            Timetable.arrivalsFromPatterns(
+                listOf(mondayOnly), "030605", at(5, 0, 13), "20261013", zone = zone
+            ).isEmpty()
+        )
+    }
+
     @Test
     fun unknownStopYieldsNothing() {
         assertTrue(Timetable.arrivalsFromPatterns(listOf(pattern), "does-not-exist", overnight, "20261012", zone = zone).isEmpty())

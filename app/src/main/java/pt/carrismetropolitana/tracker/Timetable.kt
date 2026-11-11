@@ -34,9 +34,10 @@ object Timetable {
         zone: TimeZone = TimeZone.getDefault()
     ): List<Arrival> {
         val midnight = midnightUnix(nowUnix, date, zone)
+        val day = dayName(nowUnix, zone)
         val out = ArrayList<Arrival>()
         for (pattern in patterns) {
-            if (pattern.validOn.isNotEmpty() && date !in pattern.validOn) continue
+            if (pattern.validOn.isNotEmpty() && date !in pattern.validOn && day !in pattern.validOn) continue
             val stop = pattern.stops.firstOrNull { it.stopId == stopId } ?: continue
             for (minute in stop.times) {
                 val at = midnight + minute * 60L
@@ -117,6 +118,19 @@ object Timetable {
             c.get(Calendar.DAY_OF_MONTH)
         )
     }
+
+    /**
+     * Today's weekday as a lowercase English name. Metro's bundled asset stores weekdays this
+     * way instead of exact dates, so it keeps working when the APK is not updated.
+     */
+    fun dayName(nowUnix: Long, zone: TimeZone = TimeZone.getDefault()): String {
+        val c = Calendar.getInstance(zone).apply { timeInMillis = nowUnix * 1000 }
+        return DAY_NAMES[c.get(Calendar.DAY_OF_WEEK) - 1]
+    }
+
+    private val DAY_NAMES = arrayOf(
+        "sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"
+    )
 
     /** Start of [date] in [zone], as unix seconds. */
     fun midnightUnix(nowUnix: Long, date: String, zone: TimeZone = TimeZone.getDefault()): Long {
