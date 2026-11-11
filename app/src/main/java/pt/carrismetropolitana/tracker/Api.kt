@@ -308,3 +308,5 @@ suspend fun allLines(): List<LineInfo> = withContext(Dispatchers.IO) {
         }
     }
 }
+
+const val PROVIDER_METRO = "metro"

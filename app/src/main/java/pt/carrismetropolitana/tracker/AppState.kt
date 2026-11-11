@@ -305,6 +305,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
         if (_lines.value.isNotEmpty()) return@withLock
         CarrisGtfs.ensureLoaded(getApplication())
         CpGtfs.ensureLoaded(getApplication())
+        MetroGtfs.ensureLoaded(getApplication())
         _lines.value = selectedLines()
         loadPatterns()
         loadShapes()
@@ -319,6 +320,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     private suspend fun reloadCatalogue() = catalogueLock.withLock {
         CarrisGtfs.ensureLoaded(getApplication())
         CpGtfs.ensureLoaded(getApplication())
+        MetroGtfs.ensureLoaded(getApplication())
         patterns.clear()
         _shapes.value = emptyMap()
         _lines.value = selectedLines()
@@ -329,7 +331,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     /** Tracked lines from both providers, in one stable order. */
     private suspend fun selectedLines(): List<LineInfo> {
         val chosen = tracked
-        return (cmAllLines() + CarrisGtfs.allRoutes() + CpGtfs.allRoutes())
+        return (cmAllLines() + CarrisGtfs.allRoutes() + CpGtfs.allRoutes() + MetroGtfs.allRoutes())
             .filter { it.id in chosen }
             .sortedWith(compareBy({ it.id.substringBefore(':') }, { it.shortName }))
     }
@@ -474,7 +476,8 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                 cmLive,
                 cmSchedule,
                 CarrisGtfs.scheduledArrivals(getApplication(), stopId, now),
-                CpGtfs.scheduledArrivals(getApplication(), stopId, now)
+                CpGtfs.scheduledArrivals(getApplication(), stopId, now),
+                MetroGtfs.scheduledArrivals(getApplication(), stopId, now)
             )
         )
     }
@@ -662,7 +665,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
         /** Every line either provider has, for the Settings picker. Cheap: 39 KB gzipped. */
     suspend fun loadAllLines() {
         if (_allLines.value.isNotEmpty()) return
-        _allLines.value = cmAllLines() + CarrisGtfs.allRoutes() + CpGtfs.allRoutes()
+        _allLines.value = cmAllLines() + CarrisGtfs.allRoutes() + CpGtfs.allRoutes() + MetroGtfs.allRoutes()
     }
 
     /**
@@ -798,6 +801,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
             try {
                 CarrisGtfs.ensureLoaded(getApplication())
                 CpGtfs.ensureLoaded(getApplication())
+                MetroGtfs.ensureLoaded(getApplication())
                 val cm = (readCatalog() ?: Api.allStops().also { writeCatalog(it) })
                     .map { it.copy(lineIds = it.lineIds.map { id -> nsId(PROVIDER_CM, id) }) }
                 // Deduplicated *within* each network, not across them. Both operators number
@@ -807,7 +811,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                 // outcome; the ids are not namespaced because a saved stop's id is handed
                 // straight to `Api.arrivalsByStop` and looked up in the CARRIS timetable, so
                 // decorating it here would break both.
-                val all = cm.distinctBy { it.id } + CarrisGtfs.stops().distinctBy { it.id } + CpGtfs.stops().distinctBy { it.id }
+                val all = cm.distinctBy { it.id } + CarrisGtfs.stops().distinctBy { it.id } + CpGtfs.stops().distinctBy { it.id } + MetroGtfs.stops().distinctBy { it.id }
                 _allStops.value = all
                 backfillStopCoords(all)
             } catch (e: Exception) {
