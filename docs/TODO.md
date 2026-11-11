@@ -18,7 +18,7 @@
 - [x] Offline timetable cache for saved stops
 - [ ] "Bus approaching" notifications
 - [ ] Accessibility pass (text scale, labels, colorblind-safe colors)
-- [ ] Battery/data optimizations for /vehicles polling
+- [x] Battery/data optimizations for /vehicles polling (ETag + adaptive polling)
 
 ## Larger
 - [ ] CP trains provider (separate module, optional map layer)
