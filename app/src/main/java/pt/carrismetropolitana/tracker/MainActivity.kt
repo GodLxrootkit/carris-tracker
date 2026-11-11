@@ -239,7 +239,12 @@ fun StopsScreen(state: AppState, padding: PaddingValues, onAddStop: () -> Unit) 
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f))
+                Button(onClick = {}) { Text("Carris") }
+                OutlinedButton(onClick = {}, enabled = false) { Text("CP") }
+                OutlinedButton(onClick = {}, enabled = false) { Text("TTSL") }
+                Spacer(Modifier.weight(1f))
                 Button(onClick = {}) { Text("Carris") }
                 OutlinedButton(onClick = {}, enabled = false) { Text("CP") }
                 OutlinedButton(onClick = {}, enabled = false) { Text("TTSL") }

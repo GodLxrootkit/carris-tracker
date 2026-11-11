@@ -18,6 +18,7 @@ const val API_BASE = "https://api.carrismetropolitana.pt/v2"
  */
 const val PROVIDER_CM = "cm"
 const val PROVIDER_CARRIS = "carris"
+const val PROVIDER_CP = "cp"
 
 fun nsId(provider: String, id: String): String = "$provider:$id"
 
