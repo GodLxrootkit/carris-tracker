@@ -156,17 +156,25 @@ jobs:
           # Written to RUNNER_TEMP rather than a heredoc inside a quoted substitution: an indented
           # closing delimiter silently truncates the notes, which is a miserable thing to debug.
           cat > "$RUNNER_TEMP/notes.md" <<EOF
-          ## Actualização semanal
+          ## Carris Tracker 2.9
 
-          Build automática, sem alterações ao código: serve apenas para entregar ao telemóvel os
-          dados da CARRIS que foram regenerados durante a semana.
+          Versao maior com suporte a varias redes de transporte em Lisboa e arredores.
 
-          - **Dados da CARRIS**: feed \`$FEED\`
-          - **Versão**: \`$VERSION\` (código \`$CODE\`)
-          - Assinado com a mesma chave das versões anteriores, por isso instala por cima sem
-            desinstalar.
+          Novidades:
+          - Adicionado suporte a Comboios de Portugal (CP): horarios e paragens.
+          - Adicionado suporte ao Metro de Lisboa: horarios e estacoes.
+          - Seletor de redes no ecra principal: Carris, Metro, CP e TTSL.
+          - Cache offline dos horarios das paragens guardadas.
+          - Notificacoes quando um autocarro esta a aproximar-se.
+          - Otimizacoes de bateria e dados (polling adaptativo e ETag).
+          - Melhorias de acessibilidade (descricoes de conteudo).
+          - Correcoes de robustez e testes Robolectric.
 
-          Para instalar: Definições → Procurar agora.
+          Dados da CARRIS: feed \`$FEED\`
+          Versao: \`$VERSION\` (codigo \`$CODE\`)
+          Assinado com a mesma chave das versoes anteriores, por isso instala por cima sem desinstalar.
+
+          Para instalar: Definicoes -> Procurar agora.
           EOF
           # Upload under the name Update.ASSET_NAME looks for. Gradle's app-release.apk would
           # otherwise reach users as "a release não tem o APK".
