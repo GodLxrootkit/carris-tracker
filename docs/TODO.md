@@ -16,7 +16,7 @@
 ## Product improvements
 - [ ] Direction-aware arrival filtering
 - [x] Offline timetable cache for saved stops
-- [ ] "Bus approaching" notifications
+- [x] "Bus approaching" notifications (basic)
 - [x] Accessibility pass (content descriptions; text scale/colorblind-safe colors still open)
 - [x] Battery/data optimizations for /vehicles polling (ETag + adaptive polling)
 
