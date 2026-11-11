@@ -1,0 +1,67 @@
+name: Refresh CP and Metro assets
+
+# CP and Metro publish small GTFS feeds (~0.5 MB each), unlike CARRIS's 47 MB zip, so this simply
+# downloads them weekly and regenerates the bundled JSON. The CARRIS workflow needs a header-based
+# gate to avoid a 47 MB download every day; that is not worth the complexity here.
+#
+# Like the CARRIS refresh, this only updates the data. weekly-release.yml is what puts it on
+# phones, because the bundled asset is baked into the APK.
+on:
+  schedule:
+    # Saturday 07:17 UTC: clear of the daily CARRIS refresh at 05:23 and the Sunday release.
+    - cron: '17 7 * * 6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-cp-metro-assets
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download the CP and Metro feeds
+        run: |
+          set -euo pipefail
+          UA='carris-tracker-refresh/1.0 (+https://github.com/GodLxrootkit/carris-tracker)'
+          curl -fsSL --retry 3 --max-time 300 -A "$UA" \
+            -o "$RUNNER_TEMP/cp_gtfs.zip" 'https://publico.cp.pt/gtfs/gtfs.zip'
+          curl -fsSL --retry 3 --max-time 300 -A "$UA" \
+            -o "$RUNNER_TEMP/metro_gtfs.zip" 'https://www.metrolisboa.pt/google_transit/googleTransit.zip'
+          # Refuse to regenerate from a truncated download or an HTML error page.
+          unzip -tq "$RUNNER_TEMP/cp_gtfs.zip" > /dev/null
+          unzip -tq "$RUNNER_TEMP/metro_gtfs.zip" > /dev/null
+
+      - name: Regenerate the assets
+        run: |
+          set -euo pipefail
+          python3 tools/build_cp_asset.py "$RUNNER_TEMP/cp_gtfs.zip"
+          python3 tools/build_metro_asset.py "$RUNNER_TEMP/metro_gtfs.zip"
+
+      - name: Tests still pass against the new assets
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      - name: Commit if the feeds changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app/src/main/res/raw/; then
+            echo "Feeds unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/res/raw/
+          git commit -m "chore: refresh CP and Metro assets"
+          # The daily CARRIS refresh may have pushed since this job checked out.
+          git pull --rebase --autostash origin main
+          git push
+          echo "Committed refreshed assets. A new APK is needed to ship them."

@@ -18,7 +18,10 @@ def dist(lat1,lon1,lat2,lon2):
     return 2*R*math.asin(math.sqrt(a))/1000.0
 
 def main():
-    z=zipfile.ZipFile('cp_gtfs.zip')
+    ap=argparse.ArgumentParser()
+    ap.add_argument('gtfs_zip', nargs='?', default='cp_gtfs.zip')
+    args=ap.parse_args()
+    z=zipfile.ZipFile(args.gtfs_zip)
     routes={r['route_id']:r for r in read(z,'routes.txt')}
     stops={s['stop_id']:s for s in read(z,'stops.txt')}
     trips=read(z,'trips.txt')
@@ -134,7 +137,4 @@ def main():
     print('done', len(line_list), len(pat_list), len(stop_list))
 
 if __name__=='__main__':
-    # run from temp with cp_gtfs.zip; output to raw dir
-    import zipfile
-    # expect current working dir has cp_gtfs.zip
     main()
