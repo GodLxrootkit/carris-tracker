@@ -346,12 +346,63 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                         .awaitAll()
                         .toMap()
                 }
+                writeArrivalsCache(_arrivals.value)
             }
             _lastUpdated.value = System.currentTimeMillis() / 1000
             _error.value = null
         } catch (e: Exception) {
             _error.value = e.message ?: "falha de rede"
+            readArrivalsCache()?.let { if (_arrivals.value.isEmpty()) _arrivals.value = it }
         }
+    }
+
+    private suspend fun writeArrivalsCache(arrivals: Map<String, List<Arrival>>) = withContext(Dispatchers.IO) {
+        runCatching {
+            val arr = JSONArray()
+            arrivals.forEach { (stop, list) ->
+                val o = JSONObject().put("stop", stop)
+                val a = JSONArray()
+                list.forEach { x ->
+                    a.put(JSONObject()
+                        .put("lineId", x.lineId)
+                        .put("headsign", x.headsign)
+                        .put("patternId", x.patternId)
+                        .put("scheduledUnix", x.scheduledUnix)
+                        .put("estimatedUnix", x.estimatedUnix ?: JSONObject.NULL)
+                        .put("observedUnix", x.observedUnix ?: JSONObject.NULL)
+                        .put("predicted", x.predicted))
+                }
+                o.put("arrivals", a)
+                arr.put(o)
+            }
+            File(getApplication<Application>().cacheDir, "arrivals-cache.json").writeText(arr.toString())
+        }
+    }
+
+    private suspend fun readArrivalsCache(): Map<String, List<Arrival>>? = withContext(Dispatchers.IO) {
+        runCatching {
+            val f = File(getApplication<Application>().cacheDir, "arrivals-cache.json")
+            if (!f.exists()) return@runCatching null
+            val arr = JSONArray(f.readText())
+            (0 until arr.length()).map { i ->
+                val o = arr.getJSONObject(i)
+                val stop = o.getString("stop")
+                val a = o.getJSONArray("arrivals")
+                val list = (0 until a.length()).map { j ->
+                    val x = a.getJSONObject(j)
+                    Arrival(
+                        lineId = x.getString("lineId"),
+                        headsign = x.optString("headsign"),
+                        patternId = x.optString("patternId"),
+                        scheduledUnix = x.optLong("scheduledUnix"),
+                        estimatedUnix = x.optLong("estimatedUnix").takeIf { !x.isNull("estimatedUnix") && it > 0 },
+                        observedUnix = x.optLong("observedUnix").takeIf { !x.isNull("observedUnix") && it > 0 },
+                        predicted = x.optBoolean("predicted")
+                    )
+                }
+                stop to list
+            }.toMap()
+        }.getOrNull()
     }
 
     /**
