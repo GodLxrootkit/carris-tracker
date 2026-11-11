@@ -1,0 +1,129 @@
+name: Refresh CARRIS asset
+
+# The bundled GTFS asset is a snapshot: `tools/build_carris_asset.py` distils the CARRIS feed
+# (a 46 MB zip with a 145 MB stop_times.txt) down to the 180 KB the app actually reads. Live bus
+# positions come from GTFS-RT at runtime and need nothing, but the timetable, stops, patterns and
+# route geometry are all frozen until this runs.
+#
+# The job runs daily and is a no-op on most days. CARRIS names the feed for the day it covers and
+# says so in the response headers:
+#
+#   Content-Disposition: inline; filename=gtfs_2026-10-17.zip
+#
+# so the feed's date is readable without downloading anything. `HEAD` is refused (405) and `Range`
+# is ignored (a range request gets the whole 46 MB back), but the headers arrive before the body,
+# so aborting the transfer after the first couple of kilobytes costs ~0.1 s and no bandwidth.
+# Comparing that date against `feedStartDate` in the committed asset answers "has the feed moved?"
+# exactly, with no guesswork about when CARRIS might publish.
+#
+# It refreshes the data only. It does not build or publish an APK, because that needs the signing
+# key, which is deliberately not on GitHub — see BUILD.md.
+on:
+  schedule:
+    # 05:23 UTC daily. Off the hour on purpose: GitHub's scheduler is heavily oversubscribed at
+    # :00, and being late is harmless here precisely because the job usually does nothing.
+    - cron: '23 5 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Download and regenerate even if the feed date is unchanged'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Has the feed moved?
+        id: gate
+        run: |
+          set -euo pipefail
+          url='https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS'
+          if [ "${FORCE:-false}" = "true" ]; then
+            echo "needs=true" >> "$GITHUB_OUTPUT"
+            echo "Forced."
+            exit 0
+          fi
+
+          # --max-filesize aborts once the body exceeds it. The headers have already arrived by
+          # then, which is the whole point. curl exits non-zero for this, hence `|| true`.
+          headers=$(curl -sS -D - -o /dev/null --max-filesize 4096 --max-time 60 "$url" || true)
+          remote=$(printf '%s\n' "$headers" \
+            | tr -d '\r' \
+            | sed -n 's/^[Cc]ontent-[Dd]isposition:.*filename=gtfs_\([0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}\)\.zip.*/\1/p' \
+            | head -1)
+
+          bundled=$(python3 -c "
+          import json
+          print(json.load(open('app/src/main/res/raw/carris_lines.json')).get('feedStartDate', ''))
+          ")
+
+          if [ -z "$remote" ]; then
+            # Never skip silently: if the header goes away, fall back to downloading so the asset
+            # cannot be left stale forever by a rename nobody noticed.
+            echo "needs=true" >> "$GITHUB_OUTPUT"
+            echo "No dated filename in the response headers; falling back to a full download."
+          elif [ "$remote" = "$bundled" ]; then
+            echo "needs=false" >> "$GITHUB_OUTPUT"
+            echo "Feed is still $remote, which is what the asset already holds."
+          else
+            echo "needs=true" >> "$GITHUB_OUTPUT"
+            echo "Feed is now $remote; the asset holds $bundled."
+          fi
+
+      - name: Download the CARRIS GTFS feed
+        if: steps.gate.outputs.needs == 'true'
+        run: |
+          set -euo pipefail
+          url='https://gateway.carris.pt/gateway/gtfs/api/v2.11/GTFS'
+          curl -fsSL --retry 3 --max-time 300 -o gtfs.zip "$url"
+          # A truncated or error-page download would otherwise regenerate a broken asset, so
+          # refuse to proceed unless this really is a readable zip.
+          unzip -tq gtfs.zip > /dev/null
+          echo "feed downloaded: $(stat -c%s gtfs.zip) bytes"
+          echo "feed_info: $(unzip -p gtfs.zip feed_info.txt | tail -1)"
+
+      - name: Regenerate the asset
+        if: steps.gate.outputs.needs == 'true'
+        run: |
+          set -euo pipefail
+          before=$(cat app/src/main/res/raw/carris_*.json | wc -c)
+          # Exits non-zero if a tracked route_id has disappeared from the feed, which is the
+          # signal that CARRIS restructured rather than that something went wrong here.
+          python3 tools/build_carris_asset.py gtfs.zip
+          after=$(cat app/src/main/res/raw/carris_*.json | wc -c)
+          echo "asset ${before} -> ${after} bytes"
+
+      - name: Tests still pass against the new asset
+        if: steps.gate.outputs.needs == 'true'
+        run: ./gradlew testDebugUnitTest --console=plain
+
+      - name: Commit if the feed changed
+        if: steps.gate.outputs.needs == 'true'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- app/src/main/res/raw/; then
+            echo "Feed unchanged; nothing to commit."
+            exit 0
+          fi
+          summary=$(python3 - <<'PY'
+          import json
+          a = json.load(open("app/src/main/res/raw/carris_lines.json"))
+          print(f'{a["feedVersion"]} ({a["feedStartDate"]} to {a["feedEndDate"]})')
+          PY
+          )
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/src/main/res/raw/
+          git commit -m "chore: refresh CARRIS asset to feed ${summary}"
+          git push
+          echo "Committed asset for feed ${summary}. A new APK is needed to ship it."
