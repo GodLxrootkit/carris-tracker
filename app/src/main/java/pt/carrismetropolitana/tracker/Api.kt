@@ -290,7 +290,10 @@ suspend fun allLines(): List<LineInfo> = withContext(Dispatchers.IO) {
             val code = conn.responseCode
             // No URL in the message: this text is surfaced to the user in the error banner, and a
             // raw endpoint URL is noise there. The host and path are not secret either way.
-            if (code !in 200..299) error("HTTP $code")
+            if (code !in 200..299) {
+                val body = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
+                error("HTTP $code${body?.let { ": $it" } ?: ""}")
+            }
             val stream = conn.inputStream.let { if (conn.contentEncoding == "gzip") GZIPInputStream(it) else it }
             return stream.bufferedReader().use { it.readText() }
         } finally {

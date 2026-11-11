@@ -311,7 +311,7 @@ object CarrisGtfs {
                 lon = v.lon,
                 speed = v.speedKmh,
                 status = v.status,
-                timestampMs = v.timestampSec * 1000
+                timestampMs = if (v.timestampSec > 0) v.timestampSec * 1000 else System.currentTimeMillis()
             )
         }
     }

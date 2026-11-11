@@ -616,6 +616,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                 }
                 // The check that matters. Everything above is just plumbing; this is what makes
                 // installing someone else's file impossible rather than merely unlikely.
+                if (apk.length() <= 0) error("download vazio")
                 if (!Update.signedByUs(getApplication(), apk)) {
                     Update.discard(getApplication())
                     error("o ficheiro não está assinado com a nossa chave")
@@ -763,7 +764,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                 .filter { stop -> stop.lineIds.any { it in tracked } }
                 .map { NearbyStop(it, Eta.distanceMeters(loc.latitude, loc.longitude, it.lat, it.lon).toLong()) }
                 .sortedBy { it.meters }
-                .distinctBy { it.stop.name }
+                .distinctBy { it.stop.id }
                 .take(limit)
         }
     }
@@ -782,7 +783,12 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
             val arr = JSONArray(raw)
             (0 until arr.length()).map {
                 val o = arr.getJSONObject(it)
-                SavedStop(o.getString("id"), o.getString("name"))
+                SavedStop(
+                    id = o.getString("id"),
+                    name = o.getString("name"),
+                    lat = o.optDouble("lat").takeIf { !o.isNull("lat") && it.isFinite() },
+                    lon = o.optDouble("lon").takeIf { !o.isNull("lon") && it.isFinite() }
+                )
             }
         }.getOrDefault(emptyList())
     }

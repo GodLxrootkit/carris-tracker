@@ -1,0 +1,24 @@
+# Carris Tracker - Improvement Todo
+
+## Done
+- [x] Disable Android backup
+- [x] Stop tracking release APK in git
+- [x] Fix Robolectric activity resolution for Compose tests
+
+## Near-term code fixes
+- [ ] Read persisted lat/lon in AppState.loadStops()
+- [ ] Fall back to poll time when CARRIS RT timestamp is 0
+- [ ] Log HTTP error body in Api.get()
+- [ ] distinctBy stop id in nearestStops()
+- [ ] Validate downloaded APK size before signer check
+- [ ] Adaptive polling when screen off / low battery
+
+## Product improvements
+- [ ] Direction-aware arrival filtering
+- [ ] Offline timetable cache for saved stops
+- [ ] "Bus approaching" notifications
+- [ ] Accessibility pass (text scale, labels, colorblind-safe colors)
+- [ ] Battery/data optimizations for /vehicles polling
+
+## Larger
+- [ ] CP trains provider (separate module, optional map layer)
