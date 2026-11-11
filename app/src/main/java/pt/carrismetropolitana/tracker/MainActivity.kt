@@ -154,19 +154,19 @@ fun App(state: AppState = viewModel()) {
                     NavigationBarItem(
                         selected = tab == 0,
                         onClick = { tab = 0 },
-                        icon = { Icon(Icons.Default.Place, contentDescription = null) },
+                        icon = { Icon(Icons.Default.Place, contentDescription = "Paragens") },
                         label = { Text("Paragens") }
                     )
                     NavigationBarItem(
                         selected = tab == 1,
                         onClick = { tab = 1 },
-                        icon = { Icon(Icons.Default.Map, contentDescription = null) },
+                        icon = { Icon(Icons.Default.Map, contentDescription = "Mapa") },
                         label = { Text("Mapa") }
                     )
                     NavigationBarItem(
                         selected = tab == 2,
                         onClick = { tab = 2 },
-                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Definições") },
                         label = { Text("Definições") }
                     )
                 }
@@ -304,12 +304,12 @@ fun StopsScreen(state: AppState, padding: PaddingValues, onAddStop: () -> Unit) 
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
                     FilledTonalButton(onClick = onAddStop) {
-                        Icon(Icons.Default.Search, contentDescription = null)
+                        Icon(Icons.Default.Search, contentDescription = "Pesquisar")
                         Spacer(Modifier.width(8.dp))
                         Text("Procurar paragem")
                     }
                     FilledTonalButton(onClick = { nearestWithPermission() }) {
-                        Icon(Icons.Default.MyLocation, contentDescription = null)
+                        Icon(Icons.Default.MyLocation, contentDescription = "Minha localização")
                         Spacer(Modifier.width(8.dp))
                         Text("Usar a paragem mais próxima")
                     }
@@ -582,7 +582,7 @@ fun StopPickerScreen(state: AppState, onBack: () -> Unit) {
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 placeholder = { Text("Procurar por nome…") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Pesquisar") },
                 singleLine = true,
                 shape = RoundedCornerShape(14.dp)
             )
@@ -646,7 +646,7 @@ private fun StopPickRow(name: String, detail: String, onClick: () -> Unit) {
                     Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
-            Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Default.Add, contentDescription = "Adicionar", tint = MaterialTheme.colorScheme.primary)
         }
     }
 }
