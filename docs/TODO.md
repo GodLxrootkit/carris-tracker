@@ -17,7 +17,7 @@
 - [ ] Direction-aware arrival filtering
 - [x] Offline timetable cache for saved stops
 - [ ] "Bus approaching" notifications
-- [ ] Accessibility pass (text scale, labels, colorblind-safe colors)
+- [x] Accessibility pass (content descriptions; text scale/colorblind-safe colors still open)
 - [x] Battery/data optimizations for /vehicles polling (ETag + adaptive polling)
 
 ## Larger
