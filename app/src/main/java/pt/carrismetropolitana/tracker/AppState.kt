@@ -1,7 +1,10 @@
 package pt.carrismetropolitana.tracker
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.os.BatteryManager
 import android.location.Location
 import android.location.LocationManager
@@ -195,6 +198,7 @@ val vehicles: StateFlow<List<Vehicle>> =
         set(v) = prefs.edit().putBoolean("autoUpdate", v).apply()
 
     private val _foreground = MutableStateFlow(true)
+    private val notifiedApproaches = mutableSetOf<String>()
 
     /**
      * Whether anything is on screen.
@@ -350,6 +354,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
             }
             _lastUpdated.value = System.currentTimeMillis() / 1000
             _error.value = null
+            notifyApproaching()
         } catch (e: Exception) {
             _error.value = e.message ?: "falha de rede"
             readArrivalsCache()?.let { if (_arrivals.value.isEmpty()) _arrivals.value = it }
@@ -403,6 +408,32 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                 stop to list
             }.toMap()
         }.getOrNull()
+    }
+
+    private fun notifyApproaching() {
+        val now = System.currentTimeMillis() / 1000
+        val nm = getApplication<Application>().getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nm.createNotificationChannel(NotificationChannel("approach", "Autocarro a aproximar-se", NotificationManager.IMPORTANCE_DEFAULT))
+        }
+        _arrivals.value.forEach { (stopId, list) ->
+            list.filter { it.effectiveUnix - now in 1..300 }.forEach { a ->
+                val key = "$stopId:${a.patternId}:${a.effectiveUnix / 300}"
+                if (notifiedApproaches.add(key)) {
+                    val n = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        android.app.Notification.Builder(getApplication(), "approach")
+                    } else {
+                        @Suppress("DEPRECATION")
+                        android.app.Notification.Builder(getApplication())
+                    }
+                        .setContentTitle("Autocarro a aproximar-se")
+                        .setContentText("${a.lineId} para ${a.headsign}")
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .build()
+                    nm.notify(key.hashCode(), n)
+                }
+            }
+        }
     }
 
     /**
