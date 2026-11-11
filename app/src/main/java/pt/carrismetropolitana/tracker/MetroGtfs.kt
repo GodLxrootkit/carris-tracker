@@ -75,8 +75,8 @@ object MetroGtfs {
     suspend fun scheduledArrivals(context: Context, stopId: String, nowUnix: Long, limit: Int = 6): List<Arrival> = withContext(Dispatchers.IO) {
         if (linesJson == null) ensureLoaded(context)
         val timesRoot = timesJson!!.getJSONObject("stops")
-        if (!timesRoot.has(stopId)) return@withContext emptyList()
-        val perPattern = timesRoot.getJSONObject(stopId)
+        val platforms = platformsOf(stopId)
+        if (platforms.none { timesRoot.has(it) }) return@withContext emptyList()
         val patternsArr = linesJson!!.getJSONArray("patterns")
         val midnight = java.util.Calendar.getInstance().apply {
             timeInMillis = nowUnix * 1000
@@ -84,34 +84,59 @@ object MetroGtfs {
         }.timeInMillis / 1000
 
         val out = ArrayList<Arrival>()
-        for (i in 0 until patternsArr.length()) {
-            val o = patternsArr.getJSONObject(i)
-            val pid = o.getString("id")
-            if (!perPattern.has(pid)) continue
-            val minutes = perPattern.getJSONArray(pid)
-            val stopsArr = o.getJSONArray("stops")
-            var hasStop = false
-            for (j in 0 until stopsArr.length()) if (stopsArr.getJSONObject(j).getString("stopId") == stopId) { hasStop = true; break }
-            if (!hasStop) continue
-            for (j in 0 until minutes.length()) {
-                val m = minutes.getInt(j)
-                val at = midnight + m * 60L
-                if (at < nowUnix - 30) continue
-                out += Arrival(
-                    lineId = nsId(PROVIDER_METRO, o.getString("lineId")),
-                    headsign = o.optString("headsign"),
-                    patternId = nsId(PROVIDER_METRO, pid),
-                    scheduledUnix = at,
-                    estimatedUnix = null,
-                    observedUnix = null,
-                    predicted = false
-                )
+        for (platform in platforms) {
+            if (!timesRoot.has(platform)) continue
+            val perPattern = timesRoot.getJSONObject(platform)
+            for (i in 0 until patternsArr.length()) {
+                val o = patternsArr.getJSONObject(i)
+                val pid = o.getString("id")
+                if (!perPattern.has(pid)) continue
+                val minutes = perPattern.getJSONArray(pid)
+                val stopsArr = o.getJSONArray("stops")
+                var hasStop = false
+                for (j in 0 until stopsArr.length()) if (stopsArr.getJSONObject(j).getString("stopId") == platform) { hasStop = true; break }
+                if (!hasStop) continue
+                for (j in 0 until minutes.length()) {
+                    val m = minutes.getInt(j)
+                    val at = midnight + m * 60L
+                    if (at < nowUnix - 30) continue
+                    out += Arrival(
+                        lineId = nsId(PROVIDER_METRO, o.getString("lineId")),
+                        headsign = o.optString("headsign"),
+                        patternId = nsId(PROVIDER_METRO, pid),
+                        scheduledUnix = at,
+                        estimatedUnix = null,
+                        observedUnix = null,
+                        predicted = false
+                    )
+                }
             }
         }
-        out.sortedBy { it.scheduledUnix }.take(limit)
+        // Limit per line, not overall: a busy line at an interchange must not crowd the other
+        // line out of the card before `Timetable.select` gets to group them.
+        out.distinctBy { it.patternId to it.scheduledUnix }
+            .groupBy { it.lineId }
+            .values
+            .flatMap { line -> line.sortedBy { it.scheduledUnix }.take(limit) }
+            .sortedBy { it.scheduledUnix }
     }
 
-    fun stops(): List<StopInfo> {
+    /**
+     * Every station, with one entry per name rather than one per platform.
+     *
+     * Metro's GTFS gives an interchange a parent station (no line ids) plus a stop per platform,
+     * so Alameda arrives as AM, AM1, AM2, AM3 and AM4. Returning those raw made the picker show
+     * five "Alameda" rows, and saving the parent produced a card with no times.
+     */
+    fun stops(): List<StopInfo> = mergeMetroStations(rawStops())
+
+    /** True for a platform too, so saved stops from before the merge still resolve their network. */
+    fun hasStop(id: String, name: String): Boolean {
+        val bare = bareOf(id)
+        return rawStops().any { it.id == bare && it.name == name }
+    }
+
+    private fun rawStops(): List<StopInfo> {
         val arr = linesJson?.getJSONArray("stops") ?: return emptyList()
         return (0 until arr.length()).map { i ->
             val o = arr.getJSONObject(i)
@@ -125,5 +150,25 @@ object MetroGtfs {
         }
     }
 
+    /** Platform stop ids that make up the station the user picked. */
+    private fun platformsOf(stopId: String): Set<String> {
+        val all = rawStops()
+        val bare = bareOf(stopId)
+        val station = all.firstOrNull { it.id == bare } ?: return setOf(bare)
+        return all.filter { it.name == station.name }.mapTo(LinkedHashSet()) { it.id }
+    }
+
     fun excluded(): Set<String> = emptySet()
 }
+
+/**
+ * One picker row per station; see [MetroGtfs.stops].
+ *
+ * shortcut: grouped by name because the bundled asset drops GTFS `parent_station`; switch to
+ * that column if two stations ever share a name.
+ */
+internal fun mergeMetroStations(stops: List<StopInfo>): List<StopInfo> =
+    stops.groupBy { it.name }.map { (_, sameName) ->
+        val parent = sameName.firstOrNull { it.lineIds.isEmpty() } ?: sameName.first()
+        parent.copy(lineIds = sameName.flatMap { it.lineIds }.distinct())
+    }

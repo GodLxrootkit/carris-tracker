@@ -682,7 +682,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     private fun providerNetworks(id: String, name: String): Set<String> = buildSet {
         if (CarrisGtfs.stops().any { it.id == id && it.name == name }) add("carris")
         if (CpGtfs.stops().any { it.id == id && it.name == name }) add(PROVIDER_CP)
-        if (MetroGtfs.stops().any { it.id == id && it.name == name }) add(PROVIDER_METRO)
+        if (MetroGtfs.hasStop(id, name)) add(PROVIDER_METRO)
     }
 
     fun isNetwork(lineId: String, network: String): Boolean = when (network) {

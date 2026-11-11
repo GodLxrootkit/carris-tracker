@@ -647,7 +647,7 @@ internal fun normalize(s: String): String =
 @Composable
 fun StopPickerScreen(state: AppState, onBack: () -> Unit) {
     val allStops by state.allStops.collectAsState()
-    val lines by state.lines.collectAsState()
+    val lines by state.allLines.collectAsState()
     val context = LocalContext.current
 
     var query by remember { mutableStateOf("") }
@@ -666,6 +666,8 @@ fun StopPickerScreen(state: AppState, onBack: () -> Unit) {
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
         if (granted) nearby = state.nearestStops()
         else permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        // Line names are a nicety here; a failed lookup must not stop the picker from opening.
+        runCatching { state.loadAllLines() }
     }
 
     // Normalised once per catalog, not once per keystroke: this used to be 12 752
@@ -735,13 +737,10 @@ fun StopPickerScreen(state: AppState, onBack: () -> Unit) {
                 }
 
                 items(results, key = { it.id }) { stop ->
+                    val lineNames = stop.lineIds.map { lines.displayNameOf(it) }.distinct().sorted()
                     StopPickRow(
                         name = stop.name,
-                        detail = providerLabel(stop) + " - " + stop.lineIds
-                            .filter { it in TRACKED_LINE_IDS }
-                            .map { lines.displayNameOf(it) }
-                            .sorted()
-                            .joinToString(" · ")
+                        detail = providerLabel(stop) + if (lineNames.isEmpty()) "" else " - " + lineNames.joinToString(" · ")
                     ) {
                         state.addStop(stop)
                         onBack()
