@@ -2,6 +2,7 @@ package pt.carrismetropolitana.tracker
 
 import android.app.Application
 import android.content.Context
+import android.os.BatteryManager
 import android.location.Location
 import android.location.LocationManager
 import androidx.lifecycle.AndroidViewModel
@@ -209,6 +210,11 @@ val vehicles: StateFlow<List<Vehicle>> =
 
     fun setForeground(foreground: Boolean) = this.foreground.set(foreground)
 
+    private fun batteryLow(): Boolean = runCatching {
+        val bm = getApplication<Application>().getSystemService(Context.BATTERY_SERVICE) as BatteryManager
+        bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) in 1..20
+    }.getOrDefault(false)
+
     init {
         viewModelScope.launch {
             // Must precede the refresh loop: the CARRIS asset supplies its lines and patterns.
@@ -227,21 +233,21 @@ val vehicles: StateFlow<List<Vehicle>> =
             while (true) {
                 awaitForeground()
                 refreshCmVehicles()
-                delay(CM_VEHICLE_POLL_MS)
+                delay(if (batteryLow()) CM_VEHICLE_POLL_MS * 2 else CM_VEHICLE_POLL_MS)
             }
         }
         viewModelScope.launch {
             while (true) {
                 awaitForeground()
                 refreshCarrisVehicles()
-                delay(CARRIS_VEHICLE_POLL_MS)
+                delay(if (batteryLow()) CARRIS_VEHICLE_POLL_MS * 2 else CARRIS_VEHICLE_POLL_MS)
             }
         }
         viewModelScope.launch {
             while (true) {
                 awaitForeground()
                 refresh()
-                delay(ARRIVAL_POLL_MS)
+                delay(if (batteryLow()) ARRIVAL_POLL_MS * 2 else ARRIVAL_POLL_MS)
             }
         }
         viewModelScope.launch {
