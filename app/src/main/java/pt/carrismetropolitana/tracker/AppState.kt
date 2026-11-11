@@ -37,13 +37,49 @@ import kotlin.math.abs
  * [lat]/[lon] are null for entries stored before they were recorded, and are backfilled from
  * the stop catalog the next time it loads. The map needs them to frame the user's stops when
  * no line filter is active.
+ *
+ * [networks] is recorded when the stop is added so a restart does not have to wait for the
+ * catalog to know which tab the stop belongs to. Older entries have it empty and are
+ * backfilled from the catalog or the bundled provider assets.
  */
 data class SavedStop(
     val id: String,
     val name: String,
     val lat: Double? = null,
-    val lon: Double? = null
+    val lon: Double? = null,
+    val networks: Set<String> = emptySet()
 )
+
+internal fun stopsToJson(stops: List<SavedStop>): String {
+    val arr = JSONArray()
+    stops.forEach { s ->
+        arr.put(JSONObject().put("id", s.id).put("name", s.name).apply {
+            if (s.lat != null && s.lon != null) {
+                put("lat", s.lat)
+                put("lon", s.lon)
+            }
+            if (s.networks.isNotEmpty()) put("networks", s.networks.joinToString(","))
+        })
+    }
+    return arr.toString()
+}
+
+internal fun stopsFromJson(raw: String?): List<SavedStop> {
+    if (raw.isNullOrEmpty()) return emptyList()
+    return runCatching {
+        val arr = JSONArray(raw)
+        (0 until arr.length()).map {
+            val o = arr.getJSONObject(it)
+            SavedStop(
+                id = o.getString("id"),
+                name = o.getString("name"),
+                lat = o.optDouble("lat").takeIf { !o.isNull("lat") && it.isFinite() },
+                lon = o.optDouble("lon").takeIf { !o.isNull("lon") && it.isFinite() },
+                networks = o.optString("networks", "").split(',').filter { it.isNotEmpty() }.toSet()
+            )
+        }
+    }.getOrDefault(emptyList())
+}
 
 data class NearbyStop(val stop: StopInfo, val meters: Long)
 
@@ -223,6 +259,11 @@ val vehicles: StateFlow<List<Vehicle>> =
         viewModelScope.launch {
             // Must precede the refresh loop: the CARRIS asset supplies its lines and patterns.
             CarrisGtfs.ensureLoaded(getApplication())
+            CpGtfs.ensureLoaded(getApplication())
+            MetroGtfs.ensureLoaded(getApplication())
+            // Old saved stops did not record their network. The bundled assets resolve CP and
+            // Metro without the 6.5 MB catalog, so those stops do not vanish on first launch.
+            backfillSavedStops(CarrisGtfs.stops() + CpGtfs.stops() + MetroGtfs.stops())
         }
         viewModelScope.launch {
             // Checked once at startup, a few seconds in so it does not compete with the asset
@@ -625,8 +666,23 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     }
 
     fun networksOf(stopId: String): Set<String> {
+        val saved = _stops.value.firstOrNull { it.id == stopId }
+        if (saved != null && saved.networks.isNotEmpty()) return saved.networks
         val stop = _allStops.value?.firstOrNull { it.id == stopId } ?: return setOf("carris")
-        return stop.lineIds.map { providerOf(it) }.toSet().ifEmpty { setOf("carris") }
+        return networksFor(stop)
+    }
+
+    /** The tabs a stop belongs to, from its lines or, when it has none, its provider's asset. */
+    private fun networksFor(stop: StopInfo): Set<String> {
+        val fromLines = stop.lineIds.map { providerOf(it) }.toSet()
+        if (fromLines.isNotEmpty()) return fromLines
+        return providerNetworks(stop.id, stop.name).ifEmpty { setOf("carris") }
+    }
+
+    private fun providerNetworks(id: String, name: String): Set<String> = buildSet {
+        if (CarrisGtfs.stops().any { it.id == id && it.name == name }) add("carris")
+        if (CpGtfs.stops().any { it.id == id && it.name == name }) add(PROVIDER_CP)
+        if (MetroGtfs.stops().any { it.id == id && it.name == name }) add(PROVIDER_METRO)
     }
 
     fun isNetwork(lineId: String, network: String): Boolean = when (network) {
@@ -777,7 +833,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
 
     fun addStop(stop: StopInfo) {
         if (_stops.value.any { it.id == stop.id }) return
-        _stops.value = _stops.value + SavedStop(stop.id, stop.name, stop.lat, stop.lon)
+        _stops.value = _stops.value + SavedStop(stop.id, stop.name, stop.lat, stop.lon, networksFor(stop))
         persistStops()
         // Make sure the stop's lines are tracked, otherwise its arrivals are filtered out
         // and the stop appears empty on every network tab.
@@ -848,7 +904,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                 // decorating it here would break both.
                 val all = cm.distinctBy { it.id } + CarrisGtfs.stops().distinctBy { it.id } + CpGtfs.stops().distinctBy { it.id } + MetroGtfs.stops().distinctBy { it.id }
                 _allStops.value = all
-                backfillStopCoords(all)
+                backfillSavedStops(all)
             } catch (e: Exception) {
                 _error.value = e.message ?: "falha de rede"
             }
@@ -908,45 +964,31 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
             .maxByOrNull { it.time }
     }
 
-    private fun loadStops(): List<SavedStop> {
-        val raw = prefs.getString("stops", null) ?: return emptyList()
-        return runCatching {
-            val arr = JSONArray(raw)
-            (0 until arr.length()).map {
-                val o = arr.getJSONObject(it)
-                SavedStop(
-                    id = o.getString("id"),
-                    name = o.getString("name"),
-                    lat = o.optDouble("lat").takeIf { !o.isNull("lat") && it.isFinite() },
-                    lon = o.optDouble("lon").takeIf { !o.isNull("lon") && it.isFinite() }
-                )
-            }
-        }.getOrDefault(emptyList())
-    }
+    private fun loadStops(): List<SavedStop> =
+        stopsFromJson(prefs.getString("stops", null))
 
     private fun persistStops() {
-        val arr = JSONArray(_stops.value.map { s ->
-            JSONObject().put("id", s.id).put("name", s.name).apply {
-                if (s.lat != null && s.lon != null) {
-                    put("lat", s.lat)
-                    put("lon", s.lon)
-                }
-            }
-        })
-        prefs.edit().putString("stops", arr.toString()).apply()
+        prefs.edit().putString("stops", stopsToJson(_stops.value)).apply()
     }
 
     /**
-     * Fills in coordinates for stops saved before they were recorded.
+     * Fills in coordinates and networks for stops saved before they were recorded.
      *
      * Cheap and idempotent: only runs when something is actually missing, and persists once.
+     * Matching on id *and* name keeps the CM/CARRIS id overlap from assigning the wrong network.
      */
-    private fun backfillStopCoords(catalog: List<StopInfo>) {
-        if (_stops.value.all { it.lat != null && it.lon != null }) return
-        val byId = catalog.associateBy(StopInfo::id)
+    private fun backfillSavedStops(catalog: List<StopInfo>) {
+        if (_stops.value.all { it.lat != null && it.lon != null && it.networks.isNotEmpty() }) return
         val filled = _stops.value.map { s ->
-            if (s.lat != null && s.lon != null) s
-            else byId[s.id]?.let { s.copy(lat = it.lat, lon = it.lon) } ?: s
+            val found = catalog.firstOrNull { it.id == s.id && it.name == s.name }
+                ?: catalog.firstOrNull { it.id == s.id }
+            s.copy(
+                lat = s.lat ?: found?.lat,
+                lon = s.lon ?: found?.lon,
+                networks = s.networks.ifEmpty {
+                    if (found != null) networksFor(found) else providerNetworks(s.id, s.name)
+                }
+            )
         }
         if (filled != _stops.value) {
             _stops.value = filled

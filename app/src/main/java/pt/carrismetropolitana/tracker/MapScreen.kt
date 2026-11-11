@@ -139,7 +139,10 @@ fun MapScreen(state: AppState, padding: PaddingValues, network: String = "carris
     val lines = allLines.filter { state.isNetwork(it.id, network) }
     val vehicles = allVehicles.filter { state.isNetwork(it.lineId, network) }
     val shapes by state.shapes.collectAsState()
-    val stops by state.stops.collectAsState()
+    val allSavedStops by state.stops.collectAsState()
+    val stops = remember(allSavedStops, network) {
+        allSavedStops.filter { state.networksOf(it.id).contains(network) }
+    }
     val allStops by state.allStops.collectAsState()
 
     /**
