@@ -281,21 +281,27 @@ suspend fun allLines(): List<LineInfo> = withContext(Dispatchers.IO) {
      * 7x the bytes — measured: 792 KB raw, 109 KB with `Accept-Encoding: gzip`. It has to be
      * asked for; `HttpURLConnection` does not send the header on its own.
      */
+    private val etags = mutableMapOf<String, String>()
+    private val cachedBodies = mutableMapOf<String, String>()
+
     private fun get(url: String): String {
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 15_000
             conn.readTimeout = 25_000
             conn.setRequestProperty("Accept-Encoding", "gzip")
+            etags[url]?.let { conn.setRequestProperty("If-None-Match", it) }
             val code = conn.responseCode
-            // No URL in the message: this text is surfaced to the user in the error banner, and a
-            // raw endpoint URL is noise there. The host and path are not secret either way.
+            if (code == 304) return cachedBodies[url] ?: error("HTTP 304 sem cache")
             if (code !in 200..299) {
                 val body = runCatching { conn.errorStream?.bufferedReader()?.use { it.readText() } }.getOrNull()
                 error("HTTP $code${body?.let { ": $it" } ?: ""}")
             }
             val stream = conn.inputStream.let { if (conn.contentEncoding == "gzip") GZIPInputStream(it) else it }
-            return stream.bufferedReader().use { it.readText() }
+            val body = stream.bufferedReader().use { it.readText() }
+            conn.getHeaderField("ETag")?.let { etags[url] = it }
+            cachedBodies[url] = body
+            return body
         } finally {
             conn.disconnect()
         }
