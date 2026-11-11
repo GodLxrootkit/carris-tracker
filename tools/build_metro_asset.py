@@ -37,47 +37,54 @@ def main():
     for t in by_trip.values():
         t.sort(key=lambda r:int(r['stop_sequence']))
 
-    # group trips by route+headsign
+    # group trips by route+headsign, then by their exact stop sequence. One headsign can have
+    # short turns or a variant that skips a station (the Azul line's Praça de Espanha), so a
+    # single representative trip per headsign silently dropped stops and all their departures.
     patterns={}
     for tr in trips:
-        key=(tr['route_id'],tr['trip_headsign'])
-        if key not in patterns:
-            patterns[key]=[]
-        patterns[key].append(tr)
+        seq=tuple(s['stop_id'] for s in by_trip.get(tr['trip_id'],[]))
+        if not seq: continue
+        patterns.setdefault((tr['route_id'],tr['trip_headsign'],seq),[]).append(tr)
 
-    # build pattern list
+    variants={}
+    for (route_id,headsign,seq),trs in patterns.items():
+        variants.setdefault((route_id,headsign),[]).append((seq,trs))
+
+    # build pattern list, most-used variant first so the primary pattern id stays stable
     pat_list=[]
-    for (route_id,headsign), trs in patterns.items():
-        # representative trip
-        rep=trs[0]
-        sts=by_trip.get(rep['trip_id'],[])
-        if not sts: continue
-        p_stops=[]
-        km=0.0
-        prev=None
-        for s in sts:
-            st=stops[s['stop_id']]
-            lat=float(st['stop_lat']); lon=float(st['stop_lon'])
-            if prev is not None:
-                km+=dist(prev[0],prev[1],lat,lon)
-            p_stops.append({'stopId':s['stop_id'],'sequence':int(s['stop_sequence']),'km':round(km,3)})
-            prev=(lat,lon)
-        # times per stop
-        times_by_stop={}
-        for tr in trs:
-            for s in by_trip.get(tr['trip_id'],[]):
-                times_by_stop.setdefault(s['stop_id'],set()).add(minutes(s['arrival_time']))
-        for ps in p_stops:
-            ps['times']=sorted(times_by_stop.get(ps['stopId'],[]))
-        pat_id=f"{route_id}_{headsign}".replace(' ','_')
-        pat_list.append({
-            'id':pat_id,
-            'lineId':route_id,
-            'headsign':headsign,
-            'shapeId':None,
-            'validOn':[],
-            'stops':p_stops
-        })
+    for (route_id,headsign),seqs in variants.items():
+        seqs.sort(key=lambda v:(-len(v[1]),v[0]))
+        for index,(seq,trs) in enumerate(seqs):
+            rep=trs[0]
+            sts=by_trip.get(rep['trip_id'],[])
+            if not sts: continue
+            p_stops=[]
+            km=0.0
+            prev=None
+            for s in sts:
+                st=stops[s['stop_id']]
+                lat=float(st['stop_lat']); lon=float(st['stop_lon'])
+                if prev is not None:
+                    km+=dist(prev[0],prev[1],lat,lon)
+                p_stops.append({'stopId':s['stop_id'],'sequence':int(s['stop_sequence']),'km':round(km,3)})
+                prev=(lat,lon)
+            # times per stop, from this variant's trips only
+            times_by_stop={}
+            for tr in trs:
+                for s in by_trip.get(tr['trip_id'],[]):
+                    times_by_stop.setdefault(s['stop_id'],set()).add(minutes(s['arrival_time']))
+            for ps in p_stops:
+                ps['times']=sorted(times_by_stop.get(ps['stopId'],[]))
+            base=f"{route_id}_{headsign}".replace(' ','_')
+            pat_id=base if index==0 else f"{base}_{index+1}"
+            pat_list.append({
+                'id':pat_id,
+                'lineId':route_id,
+                'headsign':headsign,
+                'shapeId':None,
+                'validOn':[],
+                'stops':p_stops
+            })
 
     # lines
     line_list=[]

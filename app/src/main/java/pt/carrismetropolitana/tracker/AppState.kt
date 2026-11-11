@@ -692,7 +692,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
         else -> false
     }
 
-    fun upcoming(stopId: String, network: String = "carris", perLine: Int = 2): List<Arrival> {
+    fun upcoming(stopId: String, network: String = "carris", perLine: Int = if (network == "metro") 4 else 2): List<Arrival> {
         val now = _now.value
         val known = _lines.value
         val candidates = (_arrivals.value[stopId] ?: emptyList())
@@ -977,22 +977,45 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
      * Cheap and idempotent: only runs when something is actually missing, and persists once.
      * Matching on id *and* name keeps the CM/CARRIS id overlap from assigning the wrong network.
      */
-    private fun backfillSavedStops(catalog: List<StopInfo>) {
-        if (_stops.value.all { it.lat != null && it.lon != null && it.networks.isNotEmpty() }) return
-        val filled = _stops.value.map { s ->
-            val found = catalog.firstOrNull { it.id == s.id && it.name == s.name }
-                ?: catalog.firstOrNull { it.id == s.id }
-            s.copy(
-                lat = s.lat ?: found?.lat,
-                lon = s.lon ?: found?.lon,
-                networks = s.networks.ifEmpty {
-                    if (found != null) networksFor(found) else providerNetworks(s.id, s.name)
-                }
-            )
+    private suspend fun backfillSavedStops(catalog: List<StopInfo>) {
+        if (_stops.value.any { it.lat == null || it.lon == null || it.networks.isEmpty() }) {
+            val filled = _stops.value.map { s ->
+                val found = catalog.firstOrNull { it.id == s.id && it.name == s.name }
+                    ?: catalog.firstOrNull { it.id == s.id }
+                s.copy(
+                    lat = s.lat ?: found?.lat,
+                    lon = s.lon ?: found?.lon,
+                    networks = s.networks.ifEmpty {
+                        if (found != null) networksFor(found) else providerNetworks(s.id, s.name)
+                    }
+                )
+            }
+            if (filled != _stops.value) {
+                _stops.value = filled
+                persistStops()
+            }
         }
-        if (filled != _stops.value) {
-            _stops.value = filled
-            persistStops()
-        }
+        repairSavedMetroLines()
+    }
+
+    /**
+     * Saved Metro stops added before the asset carried every line (Praça de Espanha had none)
+     * left their line untracked, so their arrivals were filtered out. One-shot: afterwards,
+     * adding a stop tracks its lines and the user's Settings choices stand.
+     */
+    private suspend fun repairSavedMetroLines() {
+        if (prefs.getBoolean("metroSavedLinesRepaired", false)) return
+        val stations = MetroGtfs.stops()
+        val wanted = _stops.value
+            .filter { networksOf(it.id).contains(PROVIDER_METRO) }
+            .flatMap { saved -> stations.firstOrNull { it.name == saved.name }?.lineIds.orEmpty() }
+            .filter { it !in tracked }
+            .toSet()
+        prefs.edit().putBoolean("metroSavedLinesRepaired", true).apply()
+        if (wanted.isEmpty()) return
+        _selection.value = _selection.value + wanted
+        persistSelection(_selection.value)
+        reloadCatalogue()
+        refresh()
     }
 }
