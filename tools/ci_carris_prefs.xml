@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="lines">carris:108_0,carris:108_3,carris:164_0,metro:C,metro:D</string>
+    <string name="stops">[{&quot;id&quot;:&quot;1203&quot;,&quot;name&quot;:&quot;Marquês Pombal&quot;,&quot;lat&quot;:38.72588,&quot;lon&quot;:-9.14924,&quot;networks&quot;:&quot;carris&quot;},{&quot;id&quot;:&quot;403&quot;,&quot;name&quot;:&quot;Alameda D. A. Henriques&quot;,&quot;lat&quot;:38.73662,&quot;lon&quot;:-9.13341,&quot;networks&quot;:&quot;carris&quot;},{&quot;id&quot;:&quot;AM&quot;,&quot;name&quot;:&quot;Alameda&quot;,&quot;lat&quot;:38.737255,&quot;lon&quot;:-9.134086,&quot;networks&quot;:&quot;metro&quot;}]</string>
+    <boolean name="autoUpdate" value="false" />
+</map>
