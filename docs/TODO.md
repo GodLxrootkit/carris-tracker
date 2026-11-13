@@ -14,7 +14,7 @@
 - [x] Adaptive polling when screen off / low battery
 
 ## Product improvements
-- [ ] Direction-aware arrival filtering
+- [x] Direction-aware arrival filtering
 - [x] Offline timetable cache for saved stops
 - [x] "Bus approaching" notifications (basic)
 - [x] Accessibility pass (content descriptions; text scale/colorblind-safe colors still open)

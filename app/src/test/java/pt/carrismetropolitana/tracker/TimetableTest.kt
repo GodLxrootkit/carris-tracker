@@ -228,6 +228,52 @@ class TimetableTest {
         assertEquals(0, selected.count { it.lineId == "carris:108_3" })
     }
 
+    /** The source cap must not spend one direction's room on the other. */
+    @Test
+    fun sourceCapKeepsBothDirections() {
+        val base = at(5, 0)
+        val outbound = pattern.copy(
+            id = "cm:1717_0_2",
+            headsign = "Colégio Militar (Metro)",
+            stops = listOf(PatternStop("030605", 33, 4210.0, (300..320).toList()))
+        )
+        val inbound = pattern.copy(
+            id = "cm:1717_1_2",
+            headsign = "Cais Sodré",
+            stops = listOf(PatternStop("030605", 33, 4210.0, (340..360).toList()))
+        )
+
+        val arrivals = Timetable.arrivalsFromPatterns(
+            listOf(outbound, inbound), "030605", base, "20261012", limit = 2, zone = zone
+        )
+
+        assertEquals(4, arrivals.size)
+        assertEquals(2, arrivals.count { it.headsign == "Colégio Militar (Metro)" })
+        assertEquals(2, arrivals.count { it.headsign == "Cais Sodré" })
+    }
+
+    /**
+     * A stop served in both directions used to give one line two rows total, so the busier
+     * direction could take both and hide the other. Each destination now gets its own quota.
+     */
+    @Test
+    fun selectTakesTwoPerDirection() {
+        val base = at(5, 0)
+        val all = (0 until 6).map { i ->
+            Arrival("cm:1717", "Colégio Militar", "p0", base + i * 60L, null, null)
+        } + (0 until 6).map { i ->
+            Arrival("cm:1717", "Cais Sodré", "p1", base + (20 + i) * 60L, null, null)
+        }
+
+        val selected = Timetable.select(all, perLine = 2) {
+            Timetable.directionKey(it.lineId, it.headsign)
+        }
+
+        assertEquals(4, selected.size)
+        assertEquals(2, selected.count { it.headsign == "Colégio Militar" })
+        assertEquals(2, selected.count { it.headsign == "Cais Sodré" })
+    }
+
     @Test
     fun mergeDoesNotTruncateBeforeSelection() {
         // 445 arrivals, as at R Elias Garcia 103. An upstream cap dropped three of four lines.

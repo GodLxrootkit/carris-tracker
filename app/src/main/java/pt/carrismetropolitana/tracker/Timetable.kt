@@ -53,7 +53,12 @@ object Timetable {
                 )
             }
         }
-        return out.sortedBy { it.scheduledUnix }.take(limit)
+        // Per line and destination, not overall: a stop served in both directions must keep
+        // room for each of them.
+        return out.groupBy { it.lineId to it.headsign }
+            .values
+            .flatMap { group -> group.sortedBy { it.scheduledUnix }.take(limit) }
+            .sortedBy { it.scheduledUnix }
     }
 
     /**
@@ -84,7 +89,8 @@ object Timetable {
     }
 
     /**
-     * Picks what the user sees: the next [perLine] departures for every tracked line.
+     * Picks what the user sees: the next [perLine] departures for every tracked line and
+     * destination.
      *
      * Per line rather than a global cap, because a global one is wrong on this network: at
      * R Elias Garcia 103 the four lines have 445 departures between them and 1717 alone has
@@ -93,6 +99,9 @@ object Timetable {
      * [lineKey] groups arrivals for one rider-facing line. It defaults to `lineId`, but the
      * app passes the short name because one line can be several route_ids — 746 is `108_0`
      * and `108_3` — and grouping by id would show four rows all badged 746.
+     *
+     * The app also includes the destination in the key, so a stop served in both directions
+     * gives each direction its own allowance instead of letting the busier one take both rows.
      *
      * Pure, and separate from [AppState.upcoming] so it can be tested without a ViewModel.
      */
@@ -108,6 +117,10 @@ object Timetable {
             .flatMap { it.take(perLine) }
             .sortedBy { it.effectiveUnix }
     }
+
+    /** Line + destination; blank destinations still get their own group. */
+    fun directionKey(lineKey: String, headsign: String): String =
+        "$lineKey|${headsign.ifBlank { "-" }}"
 
     /** Today as `yyyyMMdd` in [zone], defaulting to the device's own. */
     fun today(nowUnix: Long, zone: TimeZone = TimeZone.getDefault()): String {

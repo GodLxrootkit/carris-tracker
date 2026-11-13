@@ -655,10 +655,12 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     }
 
     /**
-     * Next passages at a stop: [perLine] departures for every tracked line, soonest first.
+     * Next passages at a stop: [perLine] departures for every tracked line and direction,
+     * soonest first.
      *
      * Grouped by short name rather than route id, so 746's two variants share one allowance
-     * instead of showing four rows badged 746.
+     * instead of showing four rows badged 746. The destination is part of the key, so each
+     * direction gets its own allowance at stops served both ways.
      */
     fun providerOf(lineId: String): String = when (lineId.substringBefore(':')) {
         "cm", "carris" -> "carris"
@@ -699,7 +701,9 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
         val known = _lines.value
         val candidates = (_arrivals.value[stopId] ?: emptyList())
             .filter { it.lineId in tracked && isNetwork(it.lineId, network) && it.effectiveUnix >= now - 30 }
-        return Timetable.select(candidates, perLine) { known.shortNameOf(it.lineId) }
+        return Timetable.select(candidates, perLine) {
+            Timetable.directionKey(known.shortNameOf(it.lineId), it.headsign)
+        }
     }
 
     /**

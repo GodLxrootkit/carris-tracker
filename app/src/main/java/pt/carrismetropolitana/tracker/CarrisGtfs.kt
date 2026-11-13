@@ -377,7 +377,10 @@ object CarrisGtfs {
                 )
             }
         }
-        return out.sortedBy { it.scheduledUnix }.take(limit)
+        return out.groupBy { it.lineId to it.headsign }
+            .values
+            .flatMap { group -> group.sortedBy { it.scheduledUnix }.take(limit) }
+            .sortedBy { it.scheduledUnix }
     }
 
     private fun getBytes(url: String): ByteArray {

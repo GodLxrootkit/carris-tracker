@@ -34,8 +34,8 @@ A interface está em português.
 - Nas redes **CP** e **Metro**, os horários vêm dos ficheiros GTFS incluídos na app; não há
   posições em tempo real.
 - No **Metro**, as estações de correspondência aparecem uma só vez (por exemplo, Alameda
-  mostra as linhas C e D juntas) e são mostradas até **4 partidas por linha**. Nas restantes
-  redes são mostradas 2 por linha.
+  mostra as linhas C e D juntas) e são mostradas até **4 partidas por linha e sentido**. Nas
+  restantes redes são mostradas 2 por linha e sentido, para nenhum destino esconder o outro.
 - As linhas do Metro usam as cores oficiais: Azul, Amarela, Verde e Vermelha.
 - A estação de Metro é filtrada pelo dia da semana: horário de dia útil e de fim de semana não
   se misturam, e partidas iguais (mesma linha, destino e minuto) aparecem uma só vez.

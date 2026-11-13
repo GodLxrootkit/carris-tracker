@@ -125,13 +125,13 @@ object MetroGtfs {
                 }
             }
         }
-        // Limit per line, not overall: a busy line at an interchange must not crowd the other
-        // line out of the card before `Timetable.select` gets to group them. Drop rows the user
-        // cannot tell apart: same line, direction and minute from two service variants.
+        // Limit per line and direction, not overall: a busy direction at an interchange must
+        // not crowd the other out before `Timetable.select` gets to group them. Drop rows the
+        // user cannot tell apart: same line, direction and minute from two service variants.
         out.distinctBy { Triple(it.lineId, it.headsign, it.scheduledUnix) }
-            .groupBy { it.lineId }
+            .groupBy { it.lineId to it.headsign }
             .values
-            .flatMap { line -> line.sortedBy { it.scheduledUnix }.take(limit) }
+            .flatMap { group -> group.sortedBy { it.scheduledUnix }.take(limit) }
             .sortedBy { it.scheduledUnix }
     }
 

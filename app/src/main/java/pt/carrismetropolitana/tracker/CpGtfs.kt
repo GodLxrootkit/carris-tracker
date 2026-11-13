@@ -108,7 +108,10 @@ object CpGtfs {
                 )
             }
         }
-        out.sortedBy { it.scheduledUnix }.take(limit)
+        out.groupBy { it.lineId to it.headsign }
+            .values
+            .flatMap { group -> group.sortedBy { it.scheduledUnix }.take(limit) }
+            .sortedBy { it.scheduledUnix }
     }
 
     fun stops(): List<StopInfo> {
