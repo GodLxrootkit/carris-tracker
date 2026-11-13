@@ -62,6 +62,8 @@ def main():
                         help="append version= and code= to a GITHUB_OUTPUT file")
     parser.add_argument("--floor", metavar="VERSION",
                         help="highest version already published (a release tag); never reuse it")
+    parser.add_argument("--set", metavar="VERSION",
+                        help="publish this exact MAJOR.MINOR.PATCH instead of bumping a patch")
     args = parser.parse_args()
 
     path = pathlib.Path(args.file)
@@ -71,10 +73,17 @@ def main():
     current_name = name_m.group(2)
     current_code = int(code_m.group(2))
     floor = args.floor.removeprefix("v").removeprefix("V") if args.floor else None
-    new_name = next_patch(current_name, floor)
-    # Advance versionCode by the number of releases the name moved past the file's version.
-    # Normally that is 1; after a stale file it also covers the skipped patch versions.
-    new_code = current_code + version_core(new_name)[2] - version_core(current_name)[2]
+    if args.set:
+        new_name = args.set.removeprefix("v").removeprefix("V")
+        version_core(new_name)
+        if floor and version_core(new_name) <= version_core(floor):
+            sys.exit(f"refusing to set {new_name!r}: it is not newer than {floor!r}")
+        new_code = current_code + 1
+    else:
+        new_name = next_patch(current_name, floor)
+        # Advance versionCode by the number of releases the name moved past the file's version.
+        # Normally that is 1; after a stale file it also covers the skipped patch versions.
+        new_code = current_code + version_core(new_name)[2] - version_core(current_name)[2]
 
     # Guard against the two drifting apart: a release whose code is not ahead of the published
     # one installs as a downgrade, which Android refuses.

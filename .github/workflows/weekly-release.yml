@@ -13,6 +13,11 @@ on:
     - cron: '0 12 * * 0'
   # Also runnable by hand, which is how this was tested.
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact version to publish, e.g. 3.0.0. Leave blank to bump the patch version.'
+        required: false
+        type: string
 
 # Only enough to push a commit, a tag and a release. The repository default is read-only, so this
 # is an explicit, narrow opt-in rather than an inherited permission.
@@ -79,7 +84,12 @@ jobs:
         id: bump
         run: |
           latest=$(git tag --list 'v*' --sort=-v:refname | head -1)
-          python3 tools/bump_version.py --apply --github-output "$GITHUB_OUTPUT" --floor "$latest"
+          if [ -n "${{ inputs.version }}" ]; then
+            python3 tools/bump_version.py --set "${{ inputs.version }}" --apply \
+              --github-output "$GITHUB_OUTPUT" --floor "$latest"
+          else
+            python3 tools/bump_version.py --apply --github-output "$GITHUB_OUTPUT" --floor "$latest"
+          fi
 
       # Stated in the release notes, so a user can tell a data build from a code change.
       - name: Read the CARRIS feed version in the asset
@@ -156,7 +166,7 @@ jobs:
           # Written to RUNNER_TEMP rather than a heredoc inside a quoted substitution: an indented
           # closing delimiter silently truncates the notes, which is a miserable thing to debug.
           cat > "$RUNNER_TEMP/notes.md" <<EOF
-          ## Carris Tracker 2.9
+          ## Carris Tracker ${VERSION%.*}
 
           Versao maior com suporte a varias redes de transporte em Lisboa e arredores.
 
