@@ -31,82 +31,82 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           script: |
-            set -eux
-            adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb shell pm clear pt.carrismetropolitana.tracker || true
+              set -eux
+              adb install -r app/build/outputs/apk/debug/app-debug.apk
+              adb shell pm clear pt.carrismetropolitana.tracker || true
+  
+              cat > /tmp/carris_tracker.xml <<'XML'
+              <?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+              <map>
+                  <string name="lines">carris:108_0,carris:108_3,carris:164_0,metro:C,metro:D</string>
+                  <string name="stops">[{&quot;id&quot;:&quot;1203&quot;,&quot;name&quot;:&quot;Marquês Pombal&quot;,&quot;lat&quot;:38.72588,&quot;lon&quot;:-9.14924,&quot;networks&quot;:&quot;carris&quot;},{&quot;id&quot;:&quot;403&quot;,&quot;name&quot;:&quot;Alameda D. A. Henriques&quot;,&quot;lat&quot;:38.73662,&quot;lon&quot;:-9.13341,&quot;networks&quot;:&quot;carris&quot;},{&quot;id&quot;:&quot;AM&quot;,&quot;name&quot;:&quot;Alameda&quot;,&quot;lat&quot;:38.737255,&quot;lon&quot;:-9.134086,&quot;networks&quot;:&quot;metro&quot;}]</string>
+                  <boolean name="autoUpdate" value="false" />
+              </map>
+              XML
+              adb push /tmp/carris_tracker.xml /data/local/tmp/carris_tracker.xml
+              adb shell chmod 644 /data/local/tmp/carris_tracker.xml
+              adb shell run-as pt.carrismetropolitana.tracker mkdir -p shared_prefs
+              adb shell run-as pt.carrismetropolitana.tracker cp /data/local/tmp/carris_tracker.xml shared_prefs/carris_tracker.xml
+  
+              adb shell am start -n pt.carrismetropolitana.tracker/.MainActivity
+              mkdir -p screenshots
+  
+              python3 - <<'PY'
+              import re, subprocess, time, xml.etree.ElementTree as ET
 
-            cat > /tmp/carris_tracker.xml <<'XML'
-            <?xml version='1.0' encoding='utf-8' standalone='yes' ?>
-            <map>
-                <string name="lines">carris:108_0,carris:108_3,carris:164_0,metro:C,metro:D</string>
-                <string name="stops">[{&quot;id&quot;:&quot;1203&quot;,&quot;name&quot;:&quot;Marquês Pombal&quot;,&quot;lat&quot;:38.72588,&quot;lon&quot;:-9.14924,&quot;networks&quot;:&quot;carris&quot;},{&quot;id&quot;:&quot;403&quot;,&quot;name&quot;:&quot;Alameda D. A. Henriques&quot;,&quot;lat&quot;:38.73662,&quot;lon&quot;:-9.13341,&quot;networks&quot;:&quot;carris&quot;},{&quot;id&quot;:&quot;AM&quot;,&quot;name&quot;:&quot;Alameda&quot;,&quot;lat&quot;:38.737255,&quot;lon&quot;:-9.134086,&quot;networks&quot;:&quot;metro&quot;}]</string>
-                <boolean name="autoUpdate" value="false" />
-            </map>
-            XML
-            adb push /tmp/carris_tracker.xml /data/local/tmp/carris_tracker.xml
-            adb shell chmod 644 /data/local/tmp/carris_tracker.xml
-            adb shell run-as pt.carrismetropolitana.tracker mkdir -p shared_prefs
-            adb shell run-as pt.carrismetropolitana.tracker cp /data/local/tmp/carris_tracker.xml shared_prefs/carris_tracker.xml
+              def adb(*args):
+                  subprocess.run(["adb", *args], check=True, stdout=subprocess.DEVNULL)
 
-            adb shell am start -n pt.carrismetropolitana.tracker/.MainActivity
-            mkdir -p screenshots
+              def dump():
+                  adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
+                  raw = subprocess.check_output(["adb", "exec-out", "cat", "/sdcard/ui.xml"])
+                  return ET.fromstring(raw)
 
-            python3 - <<'PY'
-import re, subprocess, time, xml.etree.ElementTree as ET
+              def find(text=None, desc=None):
+                  root = dump()
+                  for node in root.iter("node"):
+                      if (text and node.get("text") == text) or (desc and node.get("content-desc") == desc):
+                          b = node.get("bounds")
+                          m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", b or "")
+                          if m:
+                              return (int(m.group(1)) + int(m.group(3))) // 2, (int(m.group(2)) + int(m.group(4))) // 2
+                  raise SystemExit(f"not found: {text or desc}")
 
-def adb(*args):
-    subprocess.run(["adb", *args], check=True, stdout=subprocess.DEVNULL)
+              def tap(text=None, desc=None, wait=1.0):
+                  x, y = find(text, desc)
+                  adb("shell", "input", "tap", str(x), str(y))
+                  time.sleep(wait)
 
-def dump():
-    adb("shell", "uiautomator", "dump", "/sdcard/ui.xml")
-    raw = subprocess.check_output(["adb", "exec-out", "cat", "/sdcard/ui.xml"])
-    return ET.fromstring(raw)
+              def shot(name):
+                  with open(f"screenshots/{name}", "wb") as f:
+                      subprocess.run(["adb", "exec-out", "screencap", "-p"], stdout=f, check=True)
 
-def find(text=None, desc=None):
-    root = dump()
-    for node in root.iter("node"):
-        if (text and node.get("text") == text) or (desc and node.get("content-desc") == desc):
-            b = node.get("bounds")
-            m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", b or "")
-            if m:
-                return (int(m.group(1)) + int(m.group(3))) // 2, (int(m.group(2)) + int(m.group(4))) // 2
-    raise SystemExit(f"not found: {text or desc}")
+              for _ in range(30):
+                  try:
+                      tap("Paragens", wait=0)
+                      break
+                  except SystemExit:
+                      time.sleep(1)
 
-def tap(text=None, desc=None, wait=1.0):
-    x, y = find(text, desc)
-    adb("shell", "input", "tap", str(x), str(y))
-    time.sleep(wait)
+              time.sleep(12)
+              shot("paragens.png")
 
-def shot(name):
-    with open(f"screenshots/{name}", "wb") as f:
-        subprocess.run(["adb", "exec-out", "screencap", "-p"], stdout=f, check=True)
+              tap("Metro", wait=4)
+              shot("paragens-metro.png")
 
-for _ in range(30):
-    try:
-        tap("Paragens", wait=0)
-        break
-    except SystemExit:
-        time.sleep(1)
+              tap("Carris", wait=1)
+              tap("Definições", wait=6)
+              shot("definicoes.png")
 
-time.sleep(12)
-shot("paragens.png")
+              tap("Paragens", wait=1)
+              tap("Mapa", wait=12)
+              shot("mapa.png")
 
-tap("Metro", wait=4)
-shot("paragens-metro.png")
-
-tap("Carris", wait=1)
-tap("Definições", wait=6)
-shot("definicoes.png")
-
-tap("Paragens", wait=1)
-tap("Mapa", wait=12)
-shot("mapa.png")
-
-tap("Paragens", wait=1)
-tap(desc="Adicionar paragem", wait=6)
-shot("adicionar-paragem.png")
-PY
-
+              tap("Paragens", wait=1)
+              tap(desc="Adicionar paragem", wait=6)
+              shot("adicionar-paragem.png")
+              PY
+  
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots
