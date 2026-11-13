@@ -106,6 +106,24 @@ class TimetableTest {
     }
 
     @Test
+    fun calendarRangeWeekdaysAndExceptionsAreHonoured() {
+        val calendarPattern = pattern.copy(
+            validOn = emptySet(),
+            validFrom = "20261001",
+            validTo = "20261031",
+            validDays = setOf("monday"),
+            validExcept = setOf("20261012"),
+            validAdd = setOf("20261013")
+        )
+
+        assertTrue(calendarPattern.runsOn("20261005", "monday"))
+        assertTrue(!calendarPattern.runsOn("20261006", "tuesday"))
+        assertTrue(!calendarPattern.runsOn("20261012", "monday"))
+        assertTrue(calendarPattern.runsOn("20261013", "tuesday"))
+        assertTrue(!calendarPattern.runsOn("20260930", "wednesday"))
+    }
+
+    @Test
     fun unknownStopYieldsNothing() {
         assertTrue(Timetable.arrivalsFromPatterns(listOf(pattern), "does-not-exist", overnight, "20261012", zone = zone).isEmpty())
     }

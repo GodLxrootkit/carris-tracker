@@ -122,7 +122,16 @@ data class PatternInfo(
     val shapeId: String?,
     /** `yyyyMMdd` dates this pattern runs, from `valid_on`. Empty means "assume always". */
     val validOn: Set<String> = emptySet(),
-    val stops: List<PatternStop>
+    val stops: List<PatternStop>,
+    /** Inclusive `yyyyMMdd` bounds; null means no bound. */
+    val validFrom: String? = null,
+    val validTo: String? = null,
+    /** Lower-case weekday names, from the GTFS calendar. Empty means all weekdays. */
+    val validDays: Set<String> = emptySet(),
+    /** `yyyyMMdd` dates removed by `calendar_dates`. */
+    val validExcept: Set<String> = emptySet(),
+    /** `yyyyMMdd` dates added by `calendar_dates`. */
+    val validAdd: Set<String> = emptySet()
 )
 
 data class Vehicle(

@@ -37,7 +37,7 @@ object Timetable {
         val day = dayName(nowUnix, zone)
         val out = ArrayList<Arrival>()
         for (pattern in patterns) {
-            if (pattern.validOn.isNotEmpty() && date !in pattern.validOn && day !in pattern.validOn) continue
+            if (!pattern.runsOn(date, day)) continue
             val stop = pattern.stops.firstOrNull { it.stopId == stopId } ?: continue
             for (minute in stop.times) {
                 val at = midnight + minute * 60L
@@ -159,4 +159,14 @@ object Timetable {
         }
         return c.timeInMillis / 1000
     }
+}
+
+/** Whether [this] pattern runs on [date], a `yyyyMMdd` date in [day]'s week. */
+fun PatternInfo.runsOn(date: String, day: String): Boolean {
+    if (date in validExcept) return false
+    if (date in validAdd) return true
+    if (validFrom != null && date < validFrom) return false
+    if (validTo != null && date > validTo) return false
+    if (validDays.isNotEmpty() && day !in validDays) return false
+    return validOn.isEmpty() || date in validOn || day in validOn
 }

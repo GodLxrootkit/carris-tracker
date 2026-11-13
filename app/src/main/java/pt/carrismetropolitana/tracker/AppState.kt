@@ -1016,6 +1016,31 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
             }
         }
         repairSavedMetroLines()
+        repairSavedFertagusLines()
+    }
+
+    /**
+     * Saved CP stops added before Fertagus was merged into the CP tab still track CP lines only,
+     * so their Fertagus arrivals are filtered out. Add just those missing Fertagus lines.
+     */
+    private suspend fun repairSavedFertagusLines() {
+        if (prefs.getBoolean("fertagusSavedLinesRepaired", false)) return
+        val stops = CpGtfs.stops()
+        val wanted = _stops.value
+            .filter { networksOf(it.id).contains(PROVIDER_CP) }
+            .flatMap { saved ->
+                (stops.firstOrNull { it.id == saved.id && it.name == saved.name }
+                    ?: stops.firstOrNull { it.id == saved.id })
+                    ?.lineIds.orEmpty()
+            }
+            .filter { it.startsWith("$PROVIDER_CP:fert_") && it !in tracked }
+            .toSet()
+        prefs.edit().putBoolean("fertagusSavedLinesRepaired", true).apply()
+        if (wanted.isEmpty()) return
+        _selection.value = _selection.value + wanted
+        persistSelection(_selection.value)
+        reloadCatalogue()
+        refresh()
     }
 
     /**

@@ -61,8 +61,13 @@ object CpGtfs {
                 lineId = nsId(PROVIDER_CP, o.getString("lineId")),
                 headsign = o.optString("headsign"),
                 shapeId = null,
-                validOn = emptySet(),
-                stops = stops
+                validOn = o.strings("validOn"),
+                stops = stops,
+                validFrom = o.optString("validFrom").ifEmpty { null },
+                validTo = o.optString("validTo").ifEmpty { null },
+                validDays = o.strings("validDays"),
+                validExcept = o.strings("validExcept"),
+                validAdd = o.strings("validAdd")
             )
         }
         null
@@ -71,6 +76,22 @@ object CpGtfs {
     suspend fun shape(context: Context, shapeId: String): List<Pair<Double, Double>> = emptyList()
 
     suspend fun vehicles(): List<Vehicle> = emptyList()
+
+    private fun JSONObject.strings(name: String): Set<String> =
+        optJSONArray(name)?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()
+
+    private fun runsOn(o: JSONObject, date: String, day: String): Boolean {
+        if (date in o.strings("validExcept")) return false
+        if (date in o.strings("validAdd")) return true
+        val from = o.optString("validFrom")
+        if (from.isNotEmpty() && date < from) return false
+        val to = o.optString("validTo")
+        if (to.isNotEmpty() && date > to) return false
+        val days = o.strings("validDays")
+        if (days.isNotEmpty() && day !in days) return false
+        val on = o.strings("validOn")
+        return on.isEmpty() || date in on || day in on
+    }
 
     suspend fun scheduledArrivals(context: Context, stopId: String, nowUnix: Long, limit: Int = 6): List<Arrival> = withContext(Dispatchers.IO) {
         if (linesJson == null) ensureLoaded(context)
@@ -82,6 +103,14 @@ object CpGtfs {
             timeInMillis = nowUnix * 1000
             set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
         }.timeInMillis / 1000
+        val today = Timetable.today(nowUnix)
+        val day = Timetable.dayName(nowUnix)
+        val yesterday = java.util.Calendar.getInstance().apply {
+            timeInMillis = nowUnix * 1000
+            add(java.util.Calendar.DAY_OF_YEAR, -1)
+        }.timeInMillis / 1000
+        val yesterdayDate = Timetable.today(yesterday)
+        val yesterdayDay = Timetable.dayName(yesterday)
 
         val out = ArrayList<Arrival>()
         for (i in 0 until patternsArr.length()) {
@@ -89,23 +118,27 @@ object CpGtfs {
             val pid = o.getString("id")
             if (!perPattern.has(pid)) continue
             val minutes = perPattern.getJSONArray(pid)
-            val stopsArr = o.getJSONArray("stops")
-            var hasStop = false
-            for (j in 0 until stopsArr.length()) if (stopsArr.getJSONObject(j).getString("stopId") == stopId) { hasStop = true; break }
-            if (!hasStop) continue
-            for (j in 0 until minutes.length()) {
-                val m = minutes.getInt(j)
-                val at = midnight + m * 60L
-                if (at < nowUnix - 30) continue
-                out += Arrival(
-                    lineId = nsId(PROVIDER_CP, o.getString("lineId")),
-                    headsign = o.optString("headsign"),
-                    patternId = nsId(PROVIDER_CP, pid),
-                    scheduledUnix = at,
-                    estimatedUnix = null,
-                    observedUnix = null,
-                    predicted = false
-                )
+            // A train at 24:06 belongs to the previous service day when seen after midnight.
+            val serviceOffsets = ArrayList<Int>(2)
+            if (runsOn(o, today, day)) serviceOffsets += 0
+            if (runsOn(o, yesterdayDate, yesterdayDay)) serviceOffsets += -1440
+            if (serviceOffsets.isEmpty()) continue
+            for (offset in serviceOffsets) {
+                for (j in 0 until minutes.length()) {
+                    val m = minutes.getInt(j)
+                    if (offset < 0 && m < 1440) continue
+                    val at = midnight + (m + offset) * 60L
+                    if (at < nowUnix - 30) continue
+                    out += Arrival(
+                        lineId = nsId(PROVIDER_CP, o.getString("lineId")),
+                        headsign = o.optString("headsign"),
+                        patternId = nsId(PROVIDER_CP, pid),
+                        scheduledUnix = at,
+                        estimatedUnix = null,
+                        observedUnix = null,
+                        predicted = false
+                    )
+                }
             }
         }
         out.groupBy { it.lineId to it.headsign }
