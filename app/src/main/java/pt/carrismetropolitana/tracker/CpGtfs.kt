@@ -141,7 +141,8 @@ object CpGtfs {
                 }
             }
         }
-        out.groupBy { it.lineId to it.headsign }
+        out.distinctBy { Triple(it.lineId, it.headsign, it.scheduledUnix) }
+            .groupBy { it.lineId to it.headsign }
             .values
             .flatMap { group -> group.sortedBy { it.scheduledUnix }.take(limit) }
             .sortedBy { it.scheduledUnix }

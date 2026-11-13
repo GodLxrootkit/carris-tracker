@@ -3,6 +3,8 @@
 From the 2.9.18 Fertagus merge review. Assumed load: one phone polling a few saved
 stops, plus the weekly CI refresh.
 
+Status: findings 1-9 are done. Findings 10-13 are still open.
+
 ## Fix now
 
 - [x] **1. CP and Fertagus trains run on the wrong days.**
@@ -34,6 +36,14 @@ stops, plus the weekly CI refresh.
   Fix: also check the previous service day for times at or after 1440, subtract
   1440, and apply that day's validity.
 
+- [x] **9. Splitting CP variants duplicated one departure at a shared stop.**
+  Route `24-94_9001-94_10009` to Regua has an express and an all-stops pattern
+  departing stop `94_9001` at the same minute on the same days. After finding 2
+  split them, both reached `CpGtfs.scheduledArrivals` and the timetable fallback,
+  so the stop showed two identical rows at 23:40. Fix: stop feeding CP patterns
+  through `Timetable.arrivalsFromPatterns` (CpGtfs already supplies them) and
+  dedupe CP arrivals by line, headsign and scheduled second.
+
 ## Fix later
 
 - [x] **4. Existing saved CP stops keep hiding Fertagus.**
@@ -58,3 +68,27 @@ stops, plus the weekly CI refresh.
   Routes `24-71_37606-94_34009` and the reverse show the raw ID because the
   Badajoz stop `71_37606` is not in the CP stops feed. The builder now falls back
   to "Entroncamento - Badajoz".
+
+## Still open
+
+- [ ] **10. No test covers the one-shot Fertagus migration.**
+  `repairSavedFertagusLines()` can silently do nothing if the saved-stop network
+  or catalog match changes. Add a test that starts with a saved CP stop and no
+  `cp:fert_*` lines, runs the backfill, and asserts the lines are added and the
+  one-shot flag is set.
+
+- [ ] **11. CP and Timetable duplicate the validity predicate.**
+  `Timetable.PatternInfo.runsOn` and `CpGtfs.runsOn` implement the same calendar
+  rules separately. Extract one shared function so a future exception fix cannot
+  make CP and the timetable fallback disagree.
+
+- [ ] **12. `calendar_dates`-only services would run every day.**
+  If a feed service has no `calendar.txt` row and only added dates, empty
+  `validFrom`, `validTo` and `validDays` currently mean "always". No current feed
+  uses this, but store the added dates in a field that cannot mean "always" before
+  one appears.
+
+- [ ] **13. The one-shot repair can override a deliberate choice.**
+  A user upgrading from 2.9.18 who deliberately deselected Fertagus lines will
+  have them re-added once. Either accept and document this, or gate the repair on
+  a version marker rather than the preference alone.

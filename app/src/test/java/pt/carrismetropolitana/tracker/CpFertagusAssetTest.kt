@@ -81,6 +81,34 @@ class CpFertagusAssetTest {
     }
 
     @Test
+    fun sharedStopDoesNotDuplicateTheSameDeparture() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        CpGtfs.ensureLoaded(context)
+
+        val line = CpGtfs.allRoutes().single { it.id == "cp:24-94_9001-94_10009" }
+        val patterns = line.patternIds.mapNotNull { CpGtfs.pattern(it) }
+        val first = patterns.first()
+        val second = patterns.first { it.id != first.id }
+        val shared = first.stops.first { a ->
+            second.stops.any { b -> b.stopId == a.stopId && b.times.any { it in a.times } }
+        }
+        val minute = shared.times.first { m ->
+            second.stops.any { it.stopId == shared.stopId && m in it.times }
+        }
+        val now = firstRun(first, 23)
+        val expected = Timetable.midnightUnix(now, Timetable.today(now)) + minute * 60L
+
+        val arrivals = CpGtfs.scheduledArrivals(context, shared.stopId, now, 100)
+
+        assertEquals(
+            1,
+            arrivals.count {
+                it.lineId == line.id && it.headsign == first.headsign && it.scheduledUnix == expected
+            }
+        )
+    }
+
+    @Test
     fun afterMidnightArrivalComesFromThePreviousServiceDay() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         CpGtfs.ensureLoaded(context)

@@ -504,11 +504,13 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
         }.getOrDefault(emptyList())
 
         // The rolling window above is empty overnight, so fall back to the timetable carried by
-        // the patterns already loaded for this run. Metro is left out: its asset has one pattern
-        // per stop-sequence variant, and MetroGtfs.scheduledArrivals already merges and dedupes
+        // the patterns already loaded for this run. Metro and CP are left out: their assets have
+        // one pattern per stop-sequence variant, and their own scheduledArrivals already dedupes
         // them, so feeding the same patterns here would list one departure twice.
         val cmSchedule = Timetable.arrivalsFromPatterns(
-            patterns = patterns.values.filterNot { it.lineId.startsWith("$PROVIDER_METRO:") },
+            patterns = patterns.values.filterNot {
+                it.lineId.startsWith("$PROVIDER_METRO:") || it.lineId.startsWith("$PROVIDER_CP:")
+            },
             stopId = stopId,
             nowUnix = now,
             date = Timetable.today(now)
