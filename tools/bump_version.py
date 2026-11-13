@@ -76,7 +76,7 @@ def main():
     if args.set:
         new_name = args.set.removeprefix("v").removeprefix("V")
         version_core(new_name)
-        if floor and version_core(new_name) <= version_core(floor):
+        if floor and version_core(new_name) <= version_core(floor) and new_name != current_name:
             sys.exit(f"refusing to set {new_name!r}: it is not newer than {floor!r}")
         new_code = current_code if new_name == current_name else current_code + 1
     else:
