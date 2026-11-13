@@ -33,6 +33,21 @@ class MetroStationAssetTest {
     }
 
     @Test
+    fun everyLineHasGeometryBuiltFromItsStations() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        MetroGtfs.ensureLoaded(context)
+
+        for (pattern in listOf("A_Reboleira", "B_Rato", "C_Cais_Do_Sodré", "D_Aeroporto")) {
+            val shape = MetroGtfs.shape(context, pattern)
+            assertTrue("$pattern should have points", shape.size >= 10)
+            assertTrue(
+                "$pattern should stay in greater Lisbon",
+                shape.all { (lat, lon) -> lat in 38.6..38.85 && lon in -9.3..-9.0 }
+            )
+        }
+    }
+
+    @Test
     fun pracaDeEspanhaHasAzulDepartures() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         MetroGtfs.ensureLoaded(context)

@@ -560,7 +560,7 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
             _shapes.value = coroutineScope {
                 _lines.value.map { line ->
                     async {
-                        val shapeId = line.patternIds
+                        val pattern = line.patternIds
                             .mapNotNull { pid -> patterns[pid] }
                             // The fullest pattern, not the first one. A line's patterns are
                             // variants of the same corridor, and they are not interchangeable:
@@ -570,7 +570,10 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
                             // on every tracked line, and costs nothing — the stop list is already
                             // parsed, whereas comparing shapes would mean fetching all of them.
                             .maxByOrNull { it.stops.size }
-                            ?.shapeId
+                        // Metro has no shape ids: its pattern id is the geometry key, and
+                        // MetroGtfs.shape() joins the stop coordinates instead.
+                        val shapeId = pattern?.shapeId
+                            ?: pattern?.id?.takeIf { line.id.startsWith("$PROVIDER_METRO:") }
                         val points = when {
                             shapeId == null -> emptyList()
                             line.id.startsWith("$PROVIDER_CARRIS:") -> CarrisGtfs.shape(getApplication(), shapeId)

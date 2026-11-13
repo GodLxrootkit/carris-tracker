@@ -48,11 +48,12 @@ A interface está em português.
 
 ### Mapa — o mapa ao vivo
 
-- Disponível apenas na rede **CARRIS**; nas outras redes o separador fica esbatido e mostra
-  «O mapa só está disponível na rede Carris.».
+- Disponível nas redes **CARRIS** e **Metro**; nas restantes o separador fica esbatido.
 - Todos os autocarros CARRIS das linhas que segue, desenhados como um ponto na cor da linha e
   com o número por cima. Toque num autocarro para ver o destino.
 - O traçado de cada linha seguida, as paragens guardadas e a sua posição.
+- No **Metro**, o traçado de cada linha seguida e as estações, marcadas com um **M** na cor da
+  linha e com o nome quando aproxima o mapa.
 - Filtro por linha, com o número de veículos de cada uma, e um botão para enquadrar todos os
   autocarros.
 - O mapa abre com zoom de rua (15) e afasta-se para enquadrar os seus pontos quando não há

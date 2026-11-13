@@ -137,7 +137,7 @@ fun App(state: AppState = viewModel()) {
     var showPicker by remember { mutableStateOf(false) }
     val update by state.update.collectAsState()
     val context = LocalContext.current
-    val mapEnabled = network == "carris"
+    val mapEnabled = network == "carris" || network == "metro"
 
     // The network polls stop when the app leaves the screen and resume when it comes back. Without
     // this they ran for the life of the process, spending ~44 MB/hour on a map nobody was looking
@@ -183,7 +183,7 @@ fun App(state: AppState = viewModel()) {
                                 if (mapEnabled) {
                                     tab = 1
                                 } else {
-                                    Toast.makeText(context, "O mapa só está disponível na rede Carris.", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "O mapa só está disponível nas redes Carris e Metro.", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.alpha(if (mapEnabled) 1f else 0.38f),

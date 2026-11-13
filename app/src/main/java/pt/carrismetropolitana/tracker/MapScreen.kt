@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,8 +85,18 @@ import kotlin.math.hypot
 private const val DEFAULT_LAT = 38.7577
 private const val DEFAULT_LON = -9.2360
 
+/** Metro's network is downtown; the Carris Metropolitana default is far west of it. */
+private const val METRO_DEFAULT_LAT = 38.7369
+private const val METRO_DEFAULT_LON = -9.1424
+private const val METRO_INITIAL_ZOOM = 12.5
+
 /** Screen radius of a bus dot, in dp. */
 private const val BUS_DOT_DP = 9f
+
+/** Metro station marker and label thresholds. */
+private const val STATION_DOT_DP = 8f
+private const val STATION_LABEL_MIN_ZOOM = 14.5
+private const val MAX_STATION_NAME_CHARS = 24
 
 /** Taps further than this (dp) from a dot count as hitting it. */
 private const val BUS_TAP_SLOP_DP = 22f
@@ -146,6 +157,18 @@ fun MapScreen(state: AppState, padding: PaddingValues, network: String = "carris
     val allStops by state.allStops.collectAsState()
 
     /**
+     * Metro's asset has stations and line colours but no shapes, so the map draws the compact
+     * network from the station coordinates themselves. Other networks already have geometry.
+     */
+    val metroStations by produceState(emptyList<StopInfo>(), network, lines) {
+        value = if (network != PROVIDER_METRO) emptyList() else {
+            MetroGtfs.ensureLoaded(context)
+            val trackedIds = lines.map { it.id }.toSet()
+            MetroGtfs.stops().filter { station -> station.lineIds.any { it in trackedIds } }
+        }
+    }
+
+    /**
      * Filters by **short name**, not by route id.
      *
      * A rider-facing line can be several `route_id`s: 746 is `108_0` (Marquês Pombal - Estação
@@ -187,8 +210,13 @@ fun MapScreen(state: AppState, padding: PaddingValues, network: String = "carris
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
-            controller.setZoom(12.0)
-            controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LON))
+            if (network == PROVIDER_METRO) {
+                controller.setZoom(METRO_INITIAL_ZOOM)
+                controller.setCenter(GeoPoint(METRO_DEFAULT_LAT, METRO_DEFAULT_LON))
+            } else {
+                controller.setZoom(12.0)
+                controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LON))
+            }
         }
     }
     val myLocationOverlay = remember { MyLocationNewOverlay(GpsMyLocationProvider(context), mapView) }
@@ -216,6 +244,7 @@ fun MapScreen(state: AppState, padding: PaddingValues, network: String = "carris
 
     /** The user's own stops, which were previously never drawn at all. */
     val stopOverlay = remember { SavedStopOverlay(context, AndroidColor.parseColor("#C61D23")) }
+    val stationOverlay = remember { StationOverlay(context) }
 
     fun visibleVehicles(): List<Vehicle> =
         if (filter == null) vehicles else vehicles.filter { it.lineId in filterIds }
@@ -337,9 +366,17 @@ val busCount = remember(vehicles, lines) {
                     map.overlays.clear()
                     map.overlays.addAll(routeOverlays)
 
+                    // Metro stations sit on their line; the saved-stop pin stays Carris-only
+                    // because it draws a bus sign.
+                    stationOverlay.stations = metroStations
+                    stationOverlay.lineColor = { id -> lines.find { it.id == id }?.color ?: "#888888" }
+                    map.overlays.add(stationOverlay)
+
                     // Above the route lines, below the buses.
-                    stopOverlay.stops = stops
-                    map.overlays.add(stopOverlay)
+                    if (network == PROVIDER_CARRIS) {
+                        stopOverlay.stops = stops
+                        map.overlays.add(stopOverlay)
+                    }
 
                     if (hasLocationPermission) {
                         myLocationOverlay.enableMyLocation()
@@ -763,6 +800,72 @@ private class BusOverlay(
             return true
         }
         return false
+    }
+}
+
+/**
+ * Metro stations: an **M** in the line colour, with the name once zoomed in enough.
+ *
+ * The Metro asset has no shape geometry, so these are also the vertices of the lines drawn
+ * below. Interchanges carry several line ids; the first one colours the marker. The M keeps a
+ * station distinct from the numbered CARRIS bus dots.
+ */
+private class StationOverlay(context: android.content.Context) : Overlay() {
+
+    private val density = context.resources.displayMetrics.density
+    private val radius = STATION_DOT_DP * density
+
+    private val fill = Paint().apply { isAntiAlias = true }
+    private val ring = Paint().apply {
+        isAntiAlias = true
+        style = Paint.Style.STROKE
+        color = AndroidColor.WHITE
+        strokeWidth = 2f * density
+    }
+    private val glyph = Paint().apply {
+        isAntiAlias = true
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+        textSize = radius * 1.05f
+    }
+    private val caption = Paint().apply {
+        isAntiAlias = true
+        color = AndroidColor.WHITE
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+        textSize = 9f * density
+        setShadowLayer(3f * density, 0f, 0f, AndroidColor.argb(210, 0, 0, 0))
+    }
+
+    var stations: List<StopInfo> = emptyList()
+    var lineColor: (String) -> String = { "#888888" }
+
+    private val pixel = Point()
+
+    override fun draw(canvas: Canvas, projection: Projection) {
+        val showNames = projection.zoomLevel >= STATION_LABEL_MIN_ZOOM
+        for (station in stations) {
+            projection.toPixels(GeoPoint(station.lat, station.lon), pixel)
+            val x = pixel.x.toFloat()
+            val y = pixel.y.toFloat()
+            fill.color = station.lineIds.firstOrNull()
+                ?.let { runCatching { AndroidColor.parseColor(lineColor(it)) }.getOrNull() }
+                ?: AndroidColor.DKGRAY
+            // Yellow needs a dark M; every other line colour is dark enough for white.
+            glyph.color = if (AndroidColor.luminance(fill.color) > 0.6f) AndroidColor.DKGRAY else AndroidColor.WHITE
+            canvas.drawCircle(x, y, radius, fill)
+            canvas.drawCircle(x, y, radius, ring)
+            canvas.drawText("M", x, y + glyph.textSize * 0.35f, glyph)
+            if (showNames) {
+                canvas.drawText(truncate(station.name), x, y + radius + caption.textSize * 1.1f, caption)
+            }
+        }
+    }
+
+    private fun truncate(name: String): String {
+        val trimmed = name.trim()
+        return if (trimmed.length <= MAX_STATION_NAME_CHARS) trimmed
+        else trimmed.take(MAX_STATION_NAME_CHARS - 1).trimEnd() + "."
     }
 }
 

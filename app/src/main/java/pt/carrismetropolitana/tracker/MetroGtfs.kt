@@ -70,7 +70,29 @@ object MetroGtfs {
         null
     }
 
-    suspend fun shape(context: Context, shapeId: String): List<Pair<Double, Double>> = emptyList()
+    /**
+     * Metro's asset has no shape geometry, only platform coordinates. A pattern's stop order is
+     * enough for a map line: join the stations in order. The bundle is small (4 lines), so no
+     * caching is needed.
+     */
+    suspend fun shape(context: Context, shapeId: String): List<Pair<Double, Double>> = withContext(Dispatchers.IO) {
+        if (linesJson == null) ensureLoaded(context)
+        val bare = bareOf(shapeId)
+        val patternsArr = linesJson?.getJSONArray("patterns") ?: return@withContext emptyList()
+        var pattern: JSONObject? = null
+        for (i in 0 until patternsArr.length()) {
+            val candidate = patternsArr.getJSONObject(i)
+            if (candidate.getString("id") == bare) {
+                pattern = candidate
+                break
+            }
+        }
+        val coords = rawStops().associate { it.id to (it.lat to it.lon) }
+        val stops = pattern?.optJSONArray("stops") ?: return@withContext emptyList()
+        (0 until stops.length()).mapNotNull { i ->
+            coords[stops.getJSONObject(i).getString("stopId")]
+        }
+    }
 
     suspend fun vehicles(): List<Vehicle> = emptyList()
 
