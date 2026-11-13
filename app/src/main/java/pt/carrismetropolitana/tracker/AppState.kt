@@ -181,8 +181,8 @@ val vehicles: StateFlow<List<Vehicle>> =
     val stops: StateFlow<List<SavedStop>> = _stops.asStateFlow()
 
     /**
-     * The lines the app tracks, as namespaced ids. Starts as [TRACKED_LINE_IDS] and is changed
-     * from the Settings tab.
+     * The lines the app tracks, as namespaced ids. New installs start empty; upgrades keep the
+     * selection they already had (including the old built-in defaults). Changed from Settings.
      *
      * This replaces the constant in every filter it used to drive: the vehicles the map draws,
      * which lines get a chip, which arrivals reach the Paragens tab, which stops the picker
@@ -828,10 +828,21 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     }
 
     private fun loadSelection(): Set<String> {
-        val raw = prefs.getString("lines", null) ?: return TRACKED_LINE_IDS.toSet()
-        val saved = raw.split(',').filter { it.isNotEmpty() }.toSet()
-        return if (saved.isEmpty()) TRACKED_LINE_IDS.toSet() else saved
+        prefs.getString("lines", null)?.let { raw ->
+            return raw.split(',').filter { it.isNotEmpty() }.toSet()
+        }
+        // No saved selection yet. An upgrade is an existing user whose defaults should stand;
+        // a fresh install starts with nothing ticked.
+        val initial = if (isUpgrade()) TRACKED_LINE_IDS.toSet() else emptySet()
+        persistSelection(initial)
+        return initial
     }
+
+    private fun isUpgrade(): Boolean = runCatching {
+        val app = getApplication<Application>()
+        val info = app.packageManager.getPackageInfo(app.packageName, 0)
+        info.lastUpdateTime > info.firstInstallTime || prefs.getAll().isNotEmpty()
+    }.getOrDefault(false)
 
     fun addStop(stop: StopInfo) {
         if (_stops.value.any { it.id == stop.id }) return
