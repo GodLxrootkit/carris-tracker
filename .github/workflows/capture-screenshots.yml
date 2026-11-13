@@ -38,12 +38,14 @@ jobs:
             adb shell chmod 644 /data/local/tmp/carris_tracker.xml
             adb shell run-as pt.carrismetropolitana.tracker mkdir -p shared_prefs
             adb shell run-as pt.carrismetropolitana.tracker cp /data/local/tmp/carris_tracker.xml shared_prefs/carris_tracker.xml
-            adb shell am start -W -n pt.carrismetropolitana.tracker/.MainActivity
+            adb shell wm dismiss-keyguard
+            adb shell input keyevent 82
+            adb shell am start -n pt.carrismetropolitana.tracker/.MainActivity
             python3 tools/ci_capture.py
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: screenshots
-          path: screenshots/*.png
-          if-no-files-found: error
+          path: screenshots/*
+          if-no-files-found: warn

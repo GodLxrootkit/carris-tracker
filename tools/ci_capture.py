@@ -50,22 +50,36 @@ def shot(name):
         adb("exec-out", "screencap", "-p", stdout=f)
 
 
+def diagnose():
+    Path("screenshots").mkdir(exist_ok=True)
+    shot("failure.png")
+    with open("screenshots/logcat.txt", "wb") as f:
+        subprocess.run(["adb", "logcat", "-d"], stdout=f)
+    subprocess.run(["adb", "shell", "uiautomator", "dump", "/sdcard/ui.xml"])
+    subprocess.run(["adb", "pull", "/sdcard/ui.xml", "screenshots/ui.xml"])
+
+
 def main():
-    wait_for("Paragens", timeout=90)
-    time.sleep(15)
-    shot("paragens.png")
+    time.sleep(8)
+    shot("startup.png")
+    try:
+        wait_for("Paragens", timeout=60)
+        time.sleep(15)
+        shot("paragens.png")
 
-    tap("Metro", wait=5)
-    shot("paragens-metro.png")
+        tap("Metro", wait=5)
+        shot("paragens-metro.png")
 
-    tap("Carris", wait=1)
-    tap("Definições", wait=6)
-    shot("definicoes.png")
+        tap("Carris", wait=1)
+        tap("Definições", wait=6)
+        shot("definicoes.png")
 
-    tap("Paragens", wait=1)
-    tap("Mapa", wait=15)
-    shot("mapa.png")
-
+        tap("Paragens", wait=1)
+        tap("Mapa", wait=15)
+        shot("mapa.png")
+    except Exception:
+        diagnose()
+        raise
 
 
 if __name__ == "__main__":
