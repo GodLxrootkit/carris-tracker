@@ -131,17 +131,25 @@ def main():
         fstops={s['stop_id']:s for s in read(fz,'stops.txt')}
 
         # shortcut: match shared stations by normalized name and distance; switch to NAP
-        # station ids if the two feeds ever start publishing them.
+        # station ids if the two feeds ever start publishing them. The current feeds put
+        # every shared station within 80 m, so 500 m leaves room without over-matching.
         cp_by_name={}
         for st in stop_list:
             cp_by_name.setdefault(norm(st['name']),[]).append(st)
         fmap={}
+        matched=ambiguous=0
         for sid,s in fstops.items():
             lat=float(s['stop_lat']); lon=float(s['stop_lon'])
             near=cp_by_name.get(norm(s['stop_name']),[])
-            match=min(near,key=lambda c:dist(lat,lon,c['lat'],c['lon']),default=None)
-            if match is not None and dist(lat,lon,match['lat'],match['lon'])<2.0:
-                fmap[sid]=match['id']
+            ranked=sorted(((dist(lat,lon,c['lat'],c['lon']),c) for c in near), key=lambda x:x[0])
+            if ranked and ranked[0][0]<0.5:
+                if len(ranked)>1 and ranked[1][0]<0.5:
+                    ambiguous+=1
+                    print(f"ambiguous shared station: {s['stop_name']!r} -> "
+                          f"{ranked[0][1]['id']} ({ranked[0][0]:.3f} km; "
+                          f"next {ranked[1][1]['id']} at {ranked[1][0]:.3f} km)")
+                matched+=1
+                fmap[sid]=ranked[0][1]['id']
             else:
                 fmap[sid]=sid
                 stop_list.append({
@@ -151,6 +159,8 @@ def main():
                     'lon':lon,
                     'lineIds':[]
                 })
+        print(f"Fertagus stops: {matched} merged into CP, "
+              f"{len(fstops)-matched} standalone, {ambiguous} ambiguous")
         pat_list.extend(build_patterns(fz,fstops,fmap,'fert_','fert_'))
 
     # The Badajoz stop is absent from the CP stops feed, but its id is in the route id.

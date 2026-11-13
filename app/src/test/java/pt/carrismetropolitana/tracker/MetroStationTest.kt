@@ -41,4 +41,15 @@ class MetroStationTest {
         assertEquals(1, merged.size)
         assertEquals(setOf("metro:A", "metro:B"), merged.single().lineIds.toSet())
     }
+
+    @Test
+    fun sameNameStationsFarApartStaySeparate() {
+        val merged = mergeMetroStations(
+            listOf(
+                StopInfo("X1", "X", 0.0, 0.0, listOf("metro:A")),
+                StopInfo("X2", "X", 0.01, 0.0, listOf("metro:B"))
+            )
+        )
+        assertEquals(2, merged.size)
+    }
 }

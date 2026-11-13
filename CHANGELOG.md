@@ -2,6 +2,37 @@
 
 All notable changes to Carris Tracker. Dates are ISO-8601.
 
+## [3.0.1] – 2026-11-13
+
+### Fixed
+
+- CP and Fertagus stops are now matched only within 500 m. The feeds currently put every shared
+  station within 80 m, so the old 2 km window was wider than the data justifies. The asset build
+  also reports ambiguous and standalone Fertagus stations instead of choosing silently.
+- Metro stops with the same name are grouped only when they are within 500 m of each other.
+  Interchange platforms still collapse into one picker row; distinct same-name stations no
+  longer merge into one.
+
+## [3.0.0] – 2026-11-13
+
+Completes the CP and Fertagus timetable review that started with the 2.9.18 merge. The first
+nine findings shipped in 2.9.19; this release closes the remaining four.
+
+### Fixed
+
+- `calendar_dates`-only CP and Fertagus services no longer run every day. The builder marks
+  those patterns as date-only, stores their added dates in `validOn`, and the timetable runs
+  them only on those dates.
+- CP and the timetable fallback now share one service-validity predicate, so weekday, weekend
+  and holiday handling cannot drift apart.
+- The one-shot repair that adds newly merged Fertagus lines to previously saved CP stops is
+  now covered by tests. Its pre-2.9.18-only assumption is documented at the repair.
+
+### Changed
+
+- Weekly releases accept an exact version and can retry a version whose tag already exists
+  without bumping the versionCode or moving the tag.
+
 ## [2.5.1] – 2026-10-18
 
 First weekly automated release. No code changes — it exists to deliver the CARRIS data that was

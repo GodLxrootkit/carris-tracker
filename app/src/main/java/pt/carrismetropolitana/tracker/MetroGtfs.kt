@@ -200,11 +200,27 @@ object MetroGtfs {
 /**
  * One picker row per station; see [MetroGtfs.stops].
  *
- * shortcut: grouped by name because the bundled asset drops GTFS `parent_station`; switch to
- * that column if two stations ever share a name.
+ * shortcut: the bundled asset drops GTFS `parent_station`, so nearby stops with the same name
+ * are treated as one station; switch to that column when it is available.
  */
 internal fun mergeMetroStations(stops: List<StopInfo>): List<StopInfo> =
-    stops.groupBy { it.name }.map { (_, sameName) ->
-        val parent = sameName.firstOrNull { it.lineIds.isEmpty() } ?: sameName.first()
-        parent.copy(lineIds = sameName.flatMap { it.lineIds }.distinct())
+    stops.groupBy { it.name }.flatMap { (_, sameName) ->
+        stationClusters(sameName).map { cluster ->
+            val parent = cluster.firstOrNull { it.lineIds.isEmpty() } ?: cluster.first()
+            parent.copy(lineIds = cluster.flatMap { it.lineIds }.distinct())
+        }
     }
+
+/** Same-name stops farther apart than this are different stations, not platforms. */
+private const val SAME_STATION_METRES = 500.0
+
+private fun stationClusters(stops: List<StopInfo>): List<List<StopInfo>> {
+    val clusters = mutableListOf<MutableList<StopInfo>>()
+    for (stop in stops) {
+        val cluster = clusters.firstOrNull { group ->
+            group.any { Eta.distanceMeters(it.lat, it.lon, stop.lat, stop.lon) <= SAME_STATION_METRES }
+        }
+        if (cluster == null) clusters += mutableListOf(stop) else cluster += stop
+    }
+    return clusters
+}
