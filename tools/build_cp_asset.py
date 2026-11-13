@@ -81,17 +81,21 @@ def build_patterns(zf,stops,stop_map,id_prefix,line_prefix):
         for ps in p_stops:
             ps['times']=sorted(times_by_stop.get(ps['stopId'],[]))
         pat_id=f"{id_prefix}{slug(route_id)}_{slug(headsign)}_{index}"
+        # A service that only exists in calendar_dates has no calendar row. Put its added
+        # dates in validOn; otherwise the empty bounds and weekdays would mean "every day".
+        date_only=not descriptor[0] and not descriptor[1]
         pats.append({
             'id':pat_id,
             'lineId':f"{line_prefix}{route_id}",
             'headsign':headsign,
             'shapeId':None,
-            'validOn':[],
+            'validOn':list(descriptor[4]) if date_only else [],
             'validFrom':descriptor[0],
             'validTo':descriptor[1],
             'validDays':list(descriptor[2]),
             'validExcept':list(descriptor[3]),
             'validAdd':list(descriptor[4]),
+            'dateOnly':date_only,
             'stops':p_stops
         })
     return pats

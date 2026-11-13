@@ -124,6 +124,24 @@ class TimetableTest {
     }
 
     @Test
+    fun calendarDatesOnlyServiceRunsOnlyOnItsAddedDates() {
+        val datesOnly = pattern.copy(
+            validOn = setOf("20261012"),
+            validFrom = null,
+            validTo = null,
+            validDays = emptySet(),
+            validExcept = emptySet(),
+            validAdd = setOf("20261012"),
+            dateOnly = true
+        )
+        val removedOnly = datesOnly.copy(validOn = emptySet(), validAdd = emptySet())
+
+        assertTrue(datesOnly.runsOn("20261012", "monday"))
+        assertTrue(!datesOnly.runsOn("20261013", "tuesday"))
+        assertTrue(!removedOnly.runsOn("20261012", "monday"))
+    }
+
+    @Test
     fun unknownStopYieldsNothing() {
         assertTrue(Timetable.arrivalsFromPatterns(listOf(pattern), "does-not-exist", overnight, "20261012", zone = zone).isEmpty())
     }

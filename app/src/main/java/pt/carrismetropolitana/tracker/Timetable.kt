@@ -161,12 +161,40 @@ object Timetable {
     }
 }
 
-/** Whether [this] pattern runs on [date], a `yyyyMMdd` date in [day]'s week. */
-fun PatternInfo.runsOn(date: String, day: String): Boolean {
+/**
+ * The one calendar rule for every GTFS pattern, whether it came from the bundled JSON or the
+ * parsed [PatternInfo]. [validOn] also carries the added dates of a `calendar_dates`-only
+ * service, so an empty [validOn] means "no date-list restriction", not "always".
+ */
+internal fun serviceRunsOn(
+    date: String,
+    day: String,
+    validOn: Set<String> = emptySet(),
+    validFrom: String? = null,
+    validTo: String? = null,
+    validDays: Set<String> = emptySet(),
+    validExcept: Set<String> = emptySet(),
+    validAdd: Set<String> = emptySet(),
+    dateOnly: Boolean = false
+): Boolean {
     if (date in validExcept) return false
     if (date in validAdd) return true
     if (validFrom != null && date < validFrom) return false
     if (validTo != null && date > validTo) return false
     if (validDays.isNotEmpty() && day !in validDays) return false
+    if (dateOnly) return date in validOn
     return validOn.isEmpty() || date in validOn || day in validOn
 }
+
+/** Whether [this] pattern runs on [date], a `yyyyMMdd` date in [day]'s week. */
+fun PatternInfo.runsOn(date: String, day: String): Boolean = serviceRunsOn(
+    date = date,
+    day = day,
+    validOn = validOn,
+    validFrom = validFrom,
+    validTo = validTo,
+    validDays = validDays,
+    validExcept = validExcept,
+    validAdd = validAdd,
+    dateOnly = dateOnly
+)

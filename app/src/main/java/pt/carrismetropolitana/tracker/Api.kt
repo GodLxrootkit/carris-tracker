@@ -120,7 +120,10 @@ data class PatternInfo(
     val lineId: String,
     val headsign: String,
     val shapeId: String?,
-    /** `yyyyMMdd` dates this pattern runs, from `valid_on`. Empty means "assume always". */
+    /**
+     * `yyyyMMdd` dates this pattern runs, from `valid_on`. Empty means no date-list restriction;
+     * a `calendar_dates`-only service puts its added dates here instead of running every day.
+     */
     val validOn: Set<String> = emptySet(),
     val stops: List<PatternStop>,
     /** Inclusive `yyyyMMdd` bounds; null means no bound. */
@@ -131,7 +134,9 @@ data class PatternInfo(
     /** `yyyyMMdd` dates removed by `calendar_dates`. */
     val validExcept: Set<String> = emptySet(),
     /** `yyyyMMdd` dates added by `calendar_dates`. */
-    val validAdd: Set<String> = emptySet()
+    val validAdd: Set<String> = emptySet(),
+    /** A service with no `calendar.txt` row: [validOn] is the complete date list. */
+    val dateOnly: Boolean = false
 )
 
 data class Vehicle(

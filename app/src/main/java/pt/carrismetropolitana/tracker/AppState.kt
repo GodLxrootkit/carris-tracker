@@ -81,6 +81,22 @@ internal fun stopsFromJson(raw: String?): List<SavedStop> {
     }.getOrDefault(emptyList())
 }
 
+/** Fertagus lines a saved CP stop should gain, without touching stops in other networks. */
+internal fun missingFertagusLines(
+    saved: List<SavedStop>,
+    catalog: List<StopInfo>,
+    tracked: Set<String>,
+    networksOf: (String) -> Set<String>
+): Set<String> = saved
+    .filter { networksOf(it.id).contains(PROVIDER_CP) }
+    .flatMap { stop ->
+        (catalog.firstOrNull { it.id == stop.id && it.name == stop.name }
+            ?: catalog.firstOrNull { it.id == stop.id })
+            ?.lineIds.orEmpty()
+    }
+    .filter { it.startsWith("$PROVIDER_CP:fert_") && it !in tracked }
+    .toSet()
+
 data class NearbyStop(val stop: StopInfo, val meters: Long)
 
 /** How far a prediction may sit from its scheduled run before they stop being the same bus. */
@@ -1024,19 +1040,13 @@ private fun keepTracked(vehicles: List<Vehicle>): List<Vehicle> =
     /**
      * Saved CP stops added before Fertagus was merged into the CP tab still track CP lines only,
      * so their Fertagus arrivals are filtered out. Add just those missing Fertagus lines.
+     *
+     * No 2.9.18 installs are assumed: this migrates pre-merge saves and cannot override a
+     * choice made after the merge.
      */
     private suspend fun repairSavedFertagusLines() {
         if (prefs.getBoolean("fertagusSavedLinesRepaired", false)) return
-        val stops = CpGtfs.stops()
-        val wanted = _stops.value
-            .filter { networksOf(it.id).contains(PROVIDER_CP) }
-            .flatMap { saved ->
-                (stops.firstOrNull { it.id == saved.id && it.name == saved.name }
-                    ?: stops.firstOrNull { it.id == saved.id })
-                    ?.lineIds.orEmpty()
-            }
-            .filter { it.startsWith("$PROVIDER_CP:fert_") && it !in tracked }
-            .toSet()
+        val wanted = missingFertagusLines(_stops.value, CpGtfs.stops(), tracked, ::networksOf)
         prefs.edit().putBoolean("fertagusSavedLinesRepaired", true).apply()
         if (wanted.isEmpty()) return
         _selection.value = _selection.value + wanted

@@ -67,7 +67,8 @@ object CpGtfs {
                 validTo = o.optString("validTo").ifEmpty { null },
                 validDays = o.strings("validDays"),
                 validExcept = o.strings("validExcept"),
-                validAdd = o.strings("validAdd")
+                validAdd = o.strings("validAdd"),
+                dateOnly = o.optBoolean("dateOnly")
             )
         }
         null
@@ -80,18 +81,17 @@ object CpGtfs {
     private fun JSONObject.strings(name: String): Set<String> =
         optJSONArray(name)?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }.orEmpty()
 
-    private fun runsOn(o: JSONObject, date: String, day: String): Boolean {
-        if (date in o.strings("validExcept")) return false
-        if (date in o.strings("validAdd")) return true
-        val from = o.optString("validFrom")
-        if (from.isNotEmpty() && date < from) return false
-        val to = o.optString("validTo")
-        if (to.isNotEmpty() && date > to) return false
-        val days = o.strings("validDays")
-        if (days.isNotEmpty() && day !in days) return false
-        val on = o.strings("validOn")
-        return on.isEmpty() || date in on || day in on
-    }
+    private fun runsOn(o: JSONObject, date: String, day: String): Boolean = serviceRunsOn(
+        date = date,
+        day = day,
+        validOn = o.strings("validOn"),
+        validFrom = o.optString("validFrom").ifEmpty { null },
+        validTo = o.optString("validTo").ifEmpty { null },
+        validDays = o.strings("validDays"),
+        validExcept = o.strings("validExcept"),
+        validAdd = o.strings("validAdd"),
+        dateOnly = o.optBoolean("dateOnly")
+    )
 
     suspend fun scheduledArrivals(context: Context, stopId: String, nowUnix: Long, limit: Int = 6): List<Arrival> = withContext(Dispatchers.IO) {
         if (linesJson == null) ensureLoaded(context)

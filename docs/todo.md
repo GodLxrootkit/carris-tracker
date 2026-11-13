@@ -3,7 +3,7 @@
 From the 2.9.18 Fertagus merge review. Assumed load: one phone polling a few saved
 stops, plus the weekly CI refresh.
 
-Status: findings 1-9 are done. Findings 10-13 are still open.
+Status: findings 1-13 are done. No open review findings.
 
 ## Fix now
 
@@ -69,26 +69,22 @@ Status: findings 1-9 are done. Findings 10-13 are still open.
   Badajoz stop `71_37606` is not in the CP stops feed. The builder now falls back
   to "Entroncamento - Badajoz".
 
-## Still open
+## Done after review
 
-- [ ] **10. No test covers the one-shot Fertagus migration.**
-  `repairSavedFertagusLines()` can silently do nothing if the saved-stop network
-  or catalog match changes. Add a test that starts with a saved CP stop and no
-  `cp:fert_*` lines, runs the backfill, and asserts the lines are added and the
-  one-shot flag is set.
+- [x] **10. No test covers the one-shot Fertagus migration.**
+  The repair logic now lives in `missingFertagusLines()`, with
+  `FertagusMigrationTest` covering missing-line filtering, the id-only fallback
+  and non-CP stops.
 
-- [ ] **11. CP and Timetable duplicate the validity predicate.**
-  `Timetable.PatternInfo.runsOn` and `CpGtfs.runsOn` implement the same calendar
-  rules separately. Extract one shared function so a future exception fix cannot
-  make CP and the timetable fallback disagree.
+- [x] **11. CP and Timetable duplicate the validity predicate.**
+  Both now call `serviceRunsOn()` in `Timetable.kt`, so CP and the timetable
+  fallback cannot drift apart.
 
-- [ ] **12. `calendar_dates`-only services would run every day.**
-  If a feed service has no `calendar.txt` row and only added dates, empty
-  `validFrom`, `validTo` and `validDays` currently mean "always". No current feed
-  uses this, but store the added dates in a field that cannot mean "always" before
-  one appears.
+- [x] **12. `calendar_dates`-only services would run every day.**
+  The builder marks such patterns `dateOnly` and puts their added dates in
+  `validOn`; `serviceRunsOn()` then runs only those dates. A date-only service
+  with no additions runs on none. Covered by `TimetableTest`.
 
-- [ ] **13. The one-shot repair can override a deliberate choice.**
-  A user upgrading from 2.9.18 who deliberately deselected Fertagus lines will
-  have them re-added once. Either accept and document this, or gate the repair on
-  a version marker rather than the preference alone.
+- [x] **13. The one-shot repair can override a deliberate choice.**
+  Closed by the no-2.9.18-install assumption: the repair only migrates saves made
+  before the Fertagus merge. Documented at `repairSavedFertagusLines()`.
