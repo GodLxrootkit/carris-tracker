@@ -11,7 +11,7 @@ estão os veículos das linhas que sigo**. Junta quatro redes numa só app:
 
 - **Carris Metropolitana** — autocarros na área metropolitana de Lisboa;
 - **CARRIS** — autocarros do município de Lisboa;
-- **CP** — comboios, com horários;
+- **CP** — comboios, incluindo Fertagus, com horários;
 - **Metro de Lisboa** — quatro linhas, com horários.
 
 A rede **TTSL** aparece na app como «em preparação» e ainda não tem dados.
@@ -65,8 +65,8 @@ A interface está em português.
 ### Definições — a app à sua medida
 
 - **Escolher as linhas que quer seguir**, de todas as redes: 717 linhas da Carris
-  Metropolitana, 176 rotas da CARRIS, 184 rotas da CP e as 4 linhas do Metro, numa lista
-  pesquisável.
+  Metropolitana, 176 rotas da CARRIS, 186 rotas da CP (inclui Fertagus) e as 4 linhas do
+  Metro, numa lista pesquisável.
 - A pesquisa de linhas ignora acentos: escrever `alcacer` ou `algacs` encontra `Alcácer` ou
   `Algács`.
 - **Uma instalação nova começa sem linhas escolhidas.** Quem já tinha a app mantém a seleção
@@ -122,13 +122,13 @@ Ainda não existem. Para adicionar, coloque PNGs em `docs/screenshots/` e refere
 |---|---|---|---|---|---|
 | Carris Metropolitana | área metropolitana de Lisboa | 717 | API pública | API pública | não |
 | CARRIS | município de Lisboa | 176 rotas | GTFS | GTFS-RT | não |
-| CP | comboios | 184 rotas | GTFS | não | não |
+| CP | comboios (inclui Fertagus) | 186 rotas | GTFS | não | não |
 | Metro de Lisboa | Lisboa | 4 linhas | GTFS | não | não |
 | TTSL | em preparação | — | — | — | — |
 
-Os ficheiros GTFS da CARRIS, da CP e do Metro são incluídos no APK para a app funcionar também
-sem rede. Os da CARRIS são atualizados diariamente e os da CP e do Metro semanalmente; o release
-semanal leva esses dados novos para o telemóvel.
+Os ficheiros GTFS da CARRIS, da CP (com Fertagus) e do Metro são incluídos no APK para a app
+funcionar também sem rede. Os da CARRIS são atualizados diariamente e os da CP, Fertagus e Metro
+semanalmente; o release semanal leva esses dados novos para o telemóvel.
 
 Mapas © OpenStreetMap contributors.
 
@@ -155,8 +155,8 @@ ficheiro:
 - **`ci.yml`** corre os testes e compila em cada push e pull request.
 - **`refresh-carris-asset.yml`** corre todos os dias às 05:23 UTC, regenera os dados da CARRIS e
   só faz commit quando o feed mudou.
-- **`refresh-cp-metro-assets.yml`** corre aos sábados às 07:17 UTC, descarrega os feeds da CP e
-  do Metro, regenera os assets e só faz commit quando algum ficheiro mudou.
+- **`refresh-cp-metro-assets.yml`** corre aos sábados às 07:17 UTC, descarrega os feeds da CP,
+  Fertagus e Metro, regenera os assets e só faz commit quando algum ficheiro mudou.
 - **`weekly-release.yml`** corre aos domingos às 12:00 UTC, sobe a `versionName` pelo incremento
   mínimo (e a `versionCode` com ela), compila o APK assinado, confirma o certificado contra a
   impressão digital compilada na app e publica-o como release. É este passo que entrega aos

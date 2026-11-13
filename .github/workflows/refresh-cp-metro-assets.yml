@@ -1,6 +1,6 @@
-name: Refresh CP and Metro assets
+name: Refresh CP, Fertagus and Metro assets
 
-# CP and Metro publish small GTFS feeds (~0.5 MB each), unlike CARRIS's 47 MB zip, so this simply
+# CP, Fertagus and Metro publish small GTFS feeds, unlike CARRIS's 47 MB zip, so this simply
 # downloads them weekly and regenerates the bundled JSON. The CARRIS workflow needs a header-based
 # gate to avoid a 47 MB download every day; that is not worth the complexity here.
 #
@@ -29,22 +29,25 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Download the CP and Metro feeds
+      - name: Download the CP, Fertagus and Metro feeds
         run: |
           set -euo pipefail
           UA='carris-tracker-refresh/1.0 (+https://github.com/GodLxrootkit/carris-tracker)'
           curl -fsSL --retry 3 --max-time 300 -A "$UA" \
             -o "$RUNNER_TEMP/cp_gtfs.zip" 'https://publico.cp.pt/gtfs/gtfs.zip'
           curl -fsSL --retry 3 --max-time 300 -A "$UA" \
+            -o "$RUNNER_TEMP/fertagus_gtfs.zip" 'https://www.fertagus.pt/GTFSTMLzip/Fertagus_GTFS.zip'
+          curl -fsSL --retry 3 --max-time 300 -A "$UA" \
             -o "$RUNNER_TEMP/metro_gtfs.zip" 'https://www.metrolisboa.pt/google_transit/googleTransit.zip'
           # Refuse to regenerate from a truncated download or an HTML error page.
           unzip -tq "$RUNNER_TEMP/cp_gtfs.zip" > /dev/null
+          unzip -tq "$RUNNER_TEMP/fertagus_gtfs.zip" > /dev/null
           unzip -tq "$RUNNER_TEMP/metro_gtfs.zip" > /dev/null
 
       - name: Regenerate the assets
         run: |
           set -euo pipefail
-          python3 tools/build_cp_asset.py "$RUNNER_TEMP/cp_gtfs.zip"
+          python3 tools/build_cp_asset.py "$RUNNER_TEMP/cp_gtfs.zip" "$RUNNER_TEMP/fertagus_gtfs.zip"
           python3 tools/build_metro_asset.py "$RUNNER_TEMP/metro_gtfs.zip"
 
       - name: Tests still pass against the new assets
@@ -60,7 +63,7 @@ jobs:
           git config user.name  'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add app/src/main/res/raw/
-          git commit -m "chore: refresh CP and Metro assets"
+          git commit -m "chore: refresh CP, Fertagus and Metro assets"
           # The daily CARRIS refresh may have pushed since this job checked out.
           git pull --rebase --autostash origin main
           git push
