@@ -66,12 +66,6 @@ def main():
     tap("Mapa", wait=15)
     shot("mapa.png")
 
-    tap("Paragens", wait=1)
-    try:
-        tap(desc="Adicionar paragem", wait=6)
-        shot("adicionar-paragem.png")
-    except LookupError:
-        print("picker button not found; skipping")
 
 
 if __name__ == "__main__":
