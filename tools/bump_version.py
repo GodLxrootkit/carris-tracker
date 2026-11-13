@@ -78,7 +78,7 @@ def main():
         version_core(new_name)
         if floor and version_core(new_name) <= version_core(floor):
             sys.exit(f"refusing to set {new_name!r}: it is not newer than {floor!r}")
-        new_code = current_code + 1
+        new_code = current_code if new_name == current_name else current_code + 1
     else:
         new_name = next_patch(current_name, floor)
         # Advance versionCode by the number of releases the name moved past the file's version.
@@ -87,8 +87,8 @@ def main():
 
     # Guard against the two drifting apart: a release whose code is not ahead of the published
     # one installs as a downgrade, which Android refuses.
-    if new_code <= current_code:
-        sys.exit("refusing to bump: versionCode would not increase")
+    if new_code < current_code:
+        sys.exit("refusing to bump: versionCode would go backwards")
 
     if args.apply:
         text = NAME_RE.sub(lambda m: f'{m.group(1)}versionName = "{new_name}"', text, count=1)
