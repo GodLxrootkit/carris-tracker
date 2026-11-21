@@ -86,33 +86,15 @@ class CpFertagusAssetTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         CpGtfs.ensureLoaded(context)
 
-        fun sharedDeparture(patterns: List<PatternInfo>): Triple<PatternInfo, PatternInfo, PatternStop>? {
-            for (first in patterns) {
-                for (second in patterns) {
-                    if (first.id == second.id || first.headsign != second.headsign) continue
-                    val stop = first.stops.firstOrNull { a ->
-                        second.stops.any { b ->
-                            b.stopId == a.stopId && b.times.any { it < 1440 && it in a.times }
-                        }
-                    }
-                    if (stop != null) return Triple(first, second, stop)
-                }
-            }
-            return null
-        }
-
         // Feed updates can remove the route this used to check, so use whichever route still
         // has two patterns sharing a departure. Skip rather than fail when the data has none.
         val match = CpGtfs.allRoutes().firstNotNullOfOrNull { route ->
             sharedDeparture(route.patternIds.mapNotNull { CpGtfs.pattern(it) })
         }
         Assume.assumeNotNull(match)
-        val (first, second, shared) = match!!
+        val (patterns, now) = match!!
+        val (first, second, shared) = patterns
 
-        val minute = shared.times.first { m ->
-            m < 1440 && second.stops.any { it.stopId == shared.stopId && m in it.times }
-        }
-        val now = sharedRun(first, second, minute)
         val arrivals = CpGtfs.scheduledArrivals(context, shared.stopId, now, 100)
 
         assertEquals(
@@ -174,8 +156,33 @@ class CpFertagusAssetTest {
         error("no valid date for ${pattern.id}")
     }
 
+    /**
+     * Patterns, shared stop and first date on which both run. Returns null when the current feed
+     * has no duplicate departure, which is data, not a regression.
+     */
+    private fun sharedDeparture(
+        patterns: List<PatternInfo>
+    ): Pair<Triple<PatternInfo, PatternInfo, PatternStop>, Long>? {
+        for (first in patterns) {
+            for (second in patterns) {
+                if (first.id == second.id || first.headsign != second.headsign) continue
+                val stop = first.stops.firstOrNull { a ->
+                    second.stops.any { b ->
+                        b.stopId == a.stopId && b.times.any { it < 1440 && it in a.times }
+                    }
+                } ?: continue
+                val minute = stop.times.first { m ->
+                    m < 1440 && second.stops.any { it.stopId == stop.stopId && m in it.times }
+                }
+                val now = sharedRun(first, second, minute) ?: continue
+                return Triple(first, second, stop) to now
+            }
+        }
+        return null
+    }
+
     /** First date on which both patterns run, at [minute] after midnight. */
-    private fun sharedRun(first: PatternInfo, second: PatternInfo, minute: Int): Long {
+    private fun sharedRun(first: PatternInfo, second: PatternInfo, minute: Int): Long? {
         val from = listOfNotNull(first.validFrom, second.validFrom).maxOrNull()
             ?: error("pattern has no validFrom: ${first.id}")
         val c = Calendar.getInstance().apply {
@@ -191,6 +198,6 @@ class CpFertagusAssetTest {
             }
             c.add(Calendar.DAY_OF_YEAR, 1)
         }
-        error("no shared date for ${first.id} and ${second.id}")
+        return null
     }
 }
