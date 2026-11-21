@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -85,25 +86,39 @@ class CpFertagusAssetTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         CpGtfs.ensureLoaded(context)
 
-        val line = CpGtfs.allRoutes().single { it.id == "cp:24-94_9001-94_10009" }
-        val patterns = line.patternIds.mapNotNull { CpGtfs.pattern(it) }
-        val first = patterns.first()
-        val second = patterns.first { it.id != first.id }
-        val shared = first.stops.first { a ->
-            second.stops.any { b -> b.stopId == a.stopId && b.times.any { it in a.times } }
+        fun sharedDeparture(patterns: List<PatternInfo>): Triple<PatternInfo, PatternInfo, PatternStop>? {
+            for (first in patterns) {
+                for (second in patterns) {
+                    if (first.id == second.id || first.headsign != second.headsign) continue
+                    val stop = first.stops.firstOrNull { a ->
+                        second.stops.any { b ->
+                            b.stopId == a.stopId && b.times.any { it < 1440 && it in a.times }
+                        }
+                    }
+                    if (stop != null) return Triple(first, second, stop)
+                }
+            }
+            return null
         }
-        val minute = shared.times.first { m ->
-            second.stops.any { it.stopId == shared.stopId && m in it.times }
-        }
-        val now = firstRun(first, 23)
-        val expected = Timetable.midnightUnix(now, Timetable.today(now)) + minute * 60L
 
+        // Feed updates can remove the route this used to check, so use whichever route still
+        // has two patterns sharing a departure. Skip rather than fail when the data has none.
+        val match = CpGtfs.allRoutes().firstNotNullOfOrNull { route ->
+            sharedDeparture(route.patternIds.mapNotNull { CpGtfs.pattern(it) })
+        }
+        Assume.assumeNotNull(match)
+        val (first, second, shared) = match!!
+
+        val minute = shared.times.first { m ->
+            m < 1440 && second.stops.any { it.stopId == shared.stopId && m in it.times }
+        }
+        val now = sharedRun(first, second, minute)
         val arrivals = CpGtfs.scheduledArrivals(context, shared.stopId, now, 100)
 
         assertEquals(
             1,
             arrivals.count {
-                it.lineId == line.id && it.headsign == first.headsign && it.scheduledUnix == expected
+                it.lineId == first.lineId && it.headsign == first.headsign && it.scheduledUnix == now
             }
         )
     }
@@ -157,5 +172,25 @@ class CpFertagusAssetTest {
             c.add(Calendar.DAY_OF_YEAR, 1)
         }
         error("no valid date for ${pattern.id}")
+    }
+
+    /** First date on which both patterns run, at [minute] after midnight. */
+    private fun sharedRun(first: PatternInfo, second: PatternInfo, minute: Int): Long {
+        val from = listOfNotNull(first.validFrom, second.validFrom).maxOrNull()
+            ?: error("pattern has no validFrom: ${first.id}")
+        val c = Calendar.getInstance().apply {
+            clear()
+            set(from.substring(0, 4).toInt(), from.substring(4, 6).toInt() - 1, from.substring(6, 8).toInt(), 0, 0, 0)
+        }
+        repeat(28) {
+            val midnight = c.timeInMillis / 1000
+            if (first.runsOn(Timetable.today(midnight), Timetable.dayName(midnight)) &&
+                second.runsOn(Timetable.today(midnight), Timetable.dayName(midnight))
+            ) {
+                return midnight + minute * 60L
+            }
+            c.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        error("no shared date for ${first.id} and ${second.id}")
     }
 }
